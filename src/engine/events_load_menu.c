@@ -28,6 +28,11 @@ static void load_read(JxEventContext *c,uint32_t file,uint16_t dest,uint16_t siz
  * File short reads/errors are intentionally not validated by this function. */
 uint16_t jx_load_game_menu(JxEventContext *c,JxFarPointer work) {
     uint16_t selection=0;
+    if(c->save_browser) {
+        int chosen=c->save_browser(c->save_browser_opaque,0);
+        if(chosen==-1){(void)JX_CALL0(c,0x1f2a,0xc24e);return 1;}
+        if(chosen>=0){selection=(uint16_t)chosen;goto selected;}
+    }
     load_background(c,0x1e88,load_buffer(c,0));
     JxFarPointer mapped=load_buffer(c,7200),source=load_buffer(c,0);
     (void)JX_CALL(c,0x2f28,0x6c7e,source.offset,source.segment,mapped.offset,mapped.segment,7200,0xb584,c->data_segment);
@@ -55,6 +60,8 @@ uint16_t jx_load_game_menu(JxEventContext *c,JxFarPointer work) {
         key=jx_far_word(c,work.segment,(uint16_t)(work.offset+2));
         if(type!=0 || key!=0x1c) continue;
         load_background(c,0x1c6c,load_buffer(c,0));
+selected:
+        (void)JX_CALL0(c,0x1f2a,0xc24e);
         (void)JX_CALL(c,0x2f28,0x3f66,0x61de,c->data_segment,1);
         JxFarPointer filename=load_work(work,36),digits=load_work(work,72);
         (void)JX_CALL(c,0x1000,0x2448,filename.offset,filename.segment,0x6a2,c->data_segment);

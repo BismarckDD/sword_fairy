@@ -17,6 +17,8 @@ typedef struct {
     uint64_t retrace_origin,retrace_frequency;
     int timer_resolution;
     uint8_t pressed[128];
+    uint32_t save_scene[160*100];
+    int save_scene_valid;
 } JxNativeWindow;
 int jx_native_window_open(JxNativeWindow *);
 int jx_native_window_pump(JxNativeWindow *);
@@ -27,4 +29,5 @@ void jx_native_window_close(JxNativeWindow *);
 int jx_native_window_post_scan(JxNativeWindow *,uint8_t);
 int jx_native_window_post_focus_loss(JxNativeWindow *);
 int jx_native_window_post_close(JxNativeWindow *);
+int jx_native_save_browser(JxNativeWindow *,uint8_t *,int);
 #endif

@@ -15,6 +15,10 @@ typedef struct {
     uint16_t data_segment;
     JxEngineCall call;
     void *opaque;
+    /* Optional native save browser: 0=load, 1=save, 2=capture clean scene.
+     * Returns zero-based slot, -1=cancel, -2=use original menu. */
+    int (*save_browser)(void *,int);
+    void *save_browser_opaque;
 } JxEventContext;
 void jx_callback_1512_000c(JxEventContext *);
 void jx_callback_1512_016a(JxEventContext *);

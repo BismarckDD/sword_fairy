@@ -26,6 +26,9 @@ static void save_write(JxEventContext *c,uint32_t file,uint16_t dest,uint16_t si
  * background and clears input, Enter writes the original17266-byte layout.
  * Open failure simply returns; individual write/close errors are ignored. */
 void jx_save_game_menu(JxEventContext *c,JxFarPointer work) {
+    if(c->save_browser && c->save_browser(c->save_browser_opaque,1)!=-2) {
+        (void)JX_CALL0(c,0x1f2a,0xc24e);return;
+    }
     uint16_t selection=0;
     save_background(c,0x1e88,save_buffer(c,0));
     JxFarPointer mapped=save_buffer(c,7200),source=save_buffer(c,0);

@@ -12,7 +12,7 @@ try {
     $platformRoot = Join-Path $repoRoot 'src/platform/windows'
     $common = @('-std=c11','-Wall','-Wextra','-Werror')
     if ($Target -in @('All','Game')) {
-        $platform = @('resource_host.c','native_window.c','native_audio.c','native_cd.c') | ForEach-Object { Join-Path $platformRoot $_ }
+        $platform = @('resource_host.c','native_window.c','native_audio.c','native_cd.c','native_saves.c') | ForEach-Object { Join-Path $platformRoot $_ }
         & $compiler cc @common @sources @platform '-I' (Join-Path $repoRoot 'src/engine') '-I' (Join-Path $repoRoot 'tests/routes') '-lgdi32' '-luser32' '-lwinmm' '-Wl,/Brepro' '-Wl,--build-id=none' '-o' (Join-Path $outputRoot 'jx_native.exe')
         if ($LASTEXITCODE -ne 0) { throw 'Game compilation failed' }
     }

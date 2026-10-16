@@ -178,6 +178,11 @@ typedef struct {
     unsigned exit_status;
     jmp_buf stop;
 } Host;
+static int host_save_browser(void *opaque,int mode) {
+    Host *h=opaque;
+    if(!h->interactive_entry || !h->window.handle || h->story_probe)return -2;
+    return jx_native_save_browser(&h->window,jx_ds(&h->c),mode);
+}
 static Host host;
 static int input_poll(void *,JxInputEvent *);
 static void window_shutdown(Host *);
@@ -383,10 +388,14 @@ static FILE *file_at(Host *h,unsigned slot) {
 static unsigned open_stream(Host *h,JxFarPointer filename,JxFarPointer mode_address) {
     char mode[256],name[256];name_at(h,mode_address,mode);name_at(h,filename,name);
     int writing=strchr(mode,'w')!=NULL || strchr(mode,'a')!=NULL || strchr(mode,'+')!=NULL;
-    int save=strlen(name)==9 && (name[0]=='S' || name[0]=='s') && (name[1]=='A' || name[1]=='a') && (name[2]=='V' || name[2]=='v') && (name[3]=='E' || name[3]=='e') && name[4]>='0' && name[4]<='4' && _stricmp(name+5,".DAT")==0;
+    unsigned save_index=99;char tail=0;
+    int save=_strnicmp(name,"SAVE",4)==0 && name[4]>='0' && name[4]<='9' &&
+        sscanf(name+4,"%u.DAT%c",&save_index,&tail)==1 && save_index<99;
+    char canonical[20];snprintf(canonical,sizeof canonical,"SAVE%u.DAT",save_index);
+    save=save && _stricmp(name,canonical)==0;
     if(writing && !save)fail(h,"native writes require an isolated save filename");
     if(!save)return open_file(h,filename);
-    char path[128];snprintf(path,sizeof path,"main_decompiled/userdata/SAVE%c.DAT",name[4]);
+    char path[128];snprintf(path,sizeof path,"main_decompiled/userdata/SAVE%u.DAT",save_index);
     unsigned slot=0;for(unsigned i=1;i<128;i++)if(!h->files[i]){slot=i;break;}
     if(!slot)fail(h,"file table exhausted");
     if(writing)(void)_mkdir("main_decompiled/userdata");
@@ -2655,7 +2664,7 @@ static int video_address_space_probe(Host *h,unsigned sample) {
     if(!f || fread(h->memory,1,sizeof h->memory,f)!=sizeof h->memory)fail(h,"video probe missing baseline");
     fclose(f);
     for(unsigned at=0x9c000;at<0xa0000;at++)h->memory[at]=(uint8_t)(at*17u+sample*29u);
-    h->c=(JxEventContext){h->memory,0x39e3,dispatch,h};
+    h->c=(JxEventContext){h->memory,0x39e3,dispatch,h,host_save_browser,h};
     h->video=&h->startup.planar;jx_video_model_init(h->video);
     h->device=jx_video_model_bus(h->video);h->raw=(JxVideoBus){h,video_out,video_in,video_read,video_write};
     h->video->map_mask=15;h->video->read_map=(uint8_t)(sample%4);h->video->mode=0x40;
@@ -2847,7 +2856,7 @@ int main(int argc,char **argv) {
     FILE *snapshot=fopen("save_tool/memory.bin","rb");
     if(!snapshot || fread(h->memory,1,sizeof h->memory,snapshot)!=sizeof h->memory)fail(h,"missing initial data snapshot");
     fclose(snapshot);h->ems_frame=boot?0xd000:0x7000;for(unsigned i=0;i<4;i++)h->mapping[i]=-1;
-    h->c=(JxEventContext){h->memory,0x39e3,dispatch,h};
+    h->c=(JxEventContext){h->memory,0x39e3,dispatch,h,host_save_browser,h};
     if(boot)jx_crt_clear_bss(&h->c);
     h->raw=(JxVideoBus){h,video_out,video_in,video_read,video_write};
     jx_video_startup_model_init(&h->startup);h->video=&h->startup.planar;

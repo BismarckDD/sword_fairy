@@ -62,6 +62,7 @@ JxGameLoopStep jx_game_loop_step(JxEventContext *c,JxFarPointer frame) {
         return JX_GAME_LOOP_PROCESSED;
     }
     if(type!=1 || loop_word(c,frame,84)!=1)return JX_GAME_LOOP_PROCESSED;
+    if(c->save_browser)(void)c->save_browser(c->save_browser_opaque,2);
     const uint16_t callbacks[5]={0x9d34,0x9d6c,0xa2f0,0x9dc2,0xb196};
     menu_callbacks(c,callbacks,5);
     jx_far_set_byte(c,frame,7,32);jx_far_set_byte(c,frame,23,32);

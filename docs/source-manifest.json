@@ -1,5 +1,5 @@
 {
-  "scope": "Current source based on the verified local reconstruction, including native presentation timing fixes; no original game resources or binaries included.",
+  "scope": "Current source based on the verified local reconstruction, including native presentation timing fixes and the 99-slot save browser; no original game resources or binaries included.",
   "files": [
     {
       "path": "src/engine/actor.c",
@@ -7,7 +7,7 @@
     },
     {
       "path": "src/engine/event_engine.h",
-      "sha256": "5ce771126b2682b0f71e91e273f995065b41768c95641e9102f81f19af1429c4"
+      "sha256": "dbcdd0c9588f2af975bdc47f906853d489d01bb02edb98cad260fa32a5740e91"
     },
     {
       "path": "src/engine/events_005.c",
@@ -379,7 +379,7 @@
     },
     {
       "path": "src/engine/events_game_loop.c",
-      "sha256": "a462a3235120d8345cd7a2743c6abf982df8f48bc5de01f3bbd883c380056777"
+      "sha256": "bcea858ba5d62812fb6302a8e1b464b202b82c096a04feed0a0964c1d5c908c4"
     },
     {
       "path": "src/engine/events_heap.c",
@@ -459,7 +459,7 @@
     },
     {
       "path": "src/engine/events_load_menu.c",
-      "sha256": "7064e745f87297dbfae7157aeebc24e5cd636e9b00e59baa393feeb1b69dcadf"
+      "sha256": "d5c0134b53f16889174423f2345eee036eba9e48fa213611be03230a60b75c61"
     },
     {
       "path": "src/engine/events_map_load.c",
@@ -627,7 +627,7 @@
     },
     {
       "path": "src/engine/events_save_menu.c",
-      "sha256": "912c8c2ccfa98f63e304983a309a6e02ec2f55b84c40985fd76f9bb521580842"
+      "sha256": "8bfe0d2c22481e7236f9b1a693c67cd55d0ac38d383375b2aec3e9eb496ce52e"
     },
     {
       "path": "src/engine/events_scan_input.c",
@@ -911,11 +911,11 @@
     },
     {
       "path": "src/platform/windows/native_window.h",
-      "sha256": "79b9a1f8b8cba5b10942ab72b61e00e6bae44427758ee32f7fb8d7662edebe88"
+      "sha256": "e970837970cf20375d2f2d2be1edd245193f74ecbbb00cb55e27ba144a625d38"
     },
     {
       "path": "src/platform/windows/resource_host.c",
-      "sha256": "12c509f4d2a0f1f1ccf427dd2060a9cba9e787e197f23a330ca89f80ad61b44c"
+      "sha256": "cc897b724fe82139311b29514664c0bc35c5b59651c3086ae7572c2d844068cd"
     },
     {
       "path": "tests/routes/blood_walkthrough_route.h",
@@ -1320,6 +1320,14 @@
     {
       "path": "tools/extract_memory.py",
       "sha256": "df9cf6d7a574bb55e1bdf9e0ac1667f5315778264fb9d6a1ab0c3edc13661bec"
+    },
+    {
+      "path": "src/platform/windows/native_saves.c",
+      "sha256": "ed10fdcd3ee8a5867ca12f1b0cd65dec6dc59f7ab8a25723b6b3de4e3ab73ecd"
+    },
+    {
+      "path": "tests/native_save_browser.c",
+      "sha256": "7888f59d528d83cfbc03ebfa9a98a42e6e6590cc9cf660618362891b1e74ca9d"
     }
   ]
 }
