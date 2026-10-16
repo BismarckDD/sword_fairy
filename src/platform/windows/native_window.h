@@ -13,10 +13,16 @@ typedef struct {
     uint32_t pixels[640*480];
     int closed;
     unsigned paints,ticks,planar_paints;
+    uint64_t tick_origin,retrace_frame;
+    uint64_t retrace_origin,retrace_frequency;
+    int timer_resolution;
     uint8_t pressed[128];
 } JxNativeWindow;
 int jx_native_window_open(JxNativeWindow *);
 int jx_native_window_pump(JxNativeWindow *);
+void jx_native_window_sync_ticks(JxNativeWindow *);
+int jx_native_window_wait_retrace(JxNativeWindow *);
+void jx_native_window_present(JxNativeWindow *);
 void jx_native_window_close(JxNativeWindow *);
 int jx_native_window_post_scan(JxNativeWindow *,uint8_t);
 int jx_native_window_post_focus_loss(JxNativeWindow *);

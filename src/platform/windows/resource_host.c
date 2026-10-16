@@ -468,6 +468,9 @@ static uint32_t dispatch(void *opaque,uint16_t s,uint16_t o,const uint16_t *a,si
     }
     if(s==0x1000) {
         if(o==0x2b6c && n==2) {
+            /* ANM playback waits on the clock without polling input. Keep
+             * painting, timer/audio IRQs and close handling alive there. */
+            if(!h->story_probe && h->window.handle && !jx_native_window_pump(&h->window))window_shutdown(h);
             uint32_t seconds;uint16_t milliseconds;
             if(h->story_probe) {
                 uint32_t now=h->probe_clock_milliseconds++;
@@ -668,12 +671,21 @@ static void dos_free(void *p,uint16_t segment) {
 static void video_out(void *p,uint16_t port,uint16_t value,unsigned width) {
     Host *h=p;
     if(port==0x3c8 && width==1){h->dac=(value&255)*3;return;}
-    if(port==0x3c9 && width==1){h->palette[h->dac++%768]=(uint8_t)value;return;}
+    if(port==0x3c9 && width==1){
+        h->palette[h->dac++%768]=(uint8_t)value;
+        if(h->dac%768==0 && h->window.handle && !h->story_probe)jx_native_window_present(&h->window);
+        return;
+    }
     h->device.out(h->device.opaque,port,value,width);
     if(h->video->error)fail(h,"unsupported VGA port operation");
 }
 static uint8_t video_in(void *p,uint16_t port) {
-    Host *h=p;if(port==0x3da)return 8;return h->device.in_byte(h->device.opaque,port);
+    Host *h=p;
+    if(port==0x3da){
+        if(h->window.handle && !h->story_probe && !jx_native_window_wait_retrace(&h->window))window_shutdown(h);
+        return 8;
+    }
+    return h->device.in_byte(h->device.opaque,port);
 }
 static uint8_t video_read(void *p,uint32_t at){Host *h=p;at&=0xfffffu;if(at<0xa0000 || at>=0xb0000)return h->memory[at];uint8_t v=h->device.read_byte(h->device.opaque,at);if(h->video->error){fprintf(stderr,"native VGA read diagnostic: address=%08x error=%u map=%u position=(%u,%u) mode=%u read_map=%u\n",(unsigned)at,(unsigned)h->video->error,(unsigned)jx_word(&h->c,0x9334),(unsigned)jx_word(&h->c,0x8760),(unsigned)jx_word(&h->c,0x8762),(unsigned)h->video->mode,(unsigned)h->video->read_map);fail(h,"unsupported VGA read");}return v;}
 static void video_write(void *p,uint32_t at,uint8_t v){Host *h=p;at&=0xfffffu;if(at<0xa0000 || at>=0xb0000){h->memory[at]=v;return;}h->device.write_byte(h->device.opaque,at,v);if(h->video->error)fail(h,"unsupported VGA write");}
@@ -2533,7 +2545,15 @@ static uint16_t cd_request(void *p,uint16_t drive,JxFarPointer packet) {
             uint32_t frames=(start>>16&255)*4500+(start>>8&255)*75+(start&255);
             if(frames<150)status=0x8103;else start=frames-150;
         }
-        if(status==0x100 && !jx_native_cd_play(&h->cd,start,count,h->window.handle!=NULL))status=0x8103;
+        if(status==0x100){
+            if(!jx_native_cd_play(&h->cd,start,count,h->window.handle!=NULL))status=0x8103;
+            else {
+                unsigned narration=(uint8_t)(jx_ds(&h->c)[0x932c]+22);
+                if(h->opening_depth && !h->story_probe && h->window.handle && count &&
+                    narration<100 && start==h->cd.tracks[narration])
+                    jx_native_window_sync_ticks(&h->window);
+            }
+        }
     }else if(command==0x85){if(!jx_native_cd_stop(&h->cd))status=0x8103;
     }else if(command==0x88){if(!jx_native_cd_resume(&h->cd))status=0x8103;
     }else status=0x8103;

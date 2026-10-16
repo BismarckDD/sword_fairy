@@ -1,5 +1,5 @@
 {
-  "scope": "Source imported from the verified local reconstruction; no original game resources or binaries included.",
+  "scope": "Current source based on the verified local reconstruction, including native presentation timing fixes; no original game resources or binaries included.",
   "files": [
     {
       "path": "src/engine/actor.c",
@@ -907,15 +907,15 @@
     },
     {
       "path": "src/platform/windows/native_window.c",
-      "sha256": "9836fa1cbca91ca9e8ac5cefd5dac20099e96949b68ec3d60ed197324b168004"
+      "sha256": "2225993be1f95f74d1c18216a02b45e21716dc4c42a8ffe80f58f1675d6a9637"
     },
     {
       "path": "src/platform/windows/native_window.h",
-      "sha256": "851e85696551245fcf21d664d68c35f365e56889f13cce7d8d75f95d50422d7d"
+      "sha256": "79b9a1f8b8cba5b10942ab72b61e00e6bae44427758ee32f7fb8d7662edebe88"
     },
     {
       "path": "src/platform/windows/resource_host.c",
-      "sha256": "9b33c3925b7bfc7b8a0200ccdd250b607ac4bcf67568744acfc6704709ebf9a1"
+      "sha256": "12c509f4d2a0f1f1ccf427dd2060a9cba9e787e197f23a330ca89f80ad61b44c"
     },
     {
       "path": "tests/routes/blood_walkthrough_route.h",

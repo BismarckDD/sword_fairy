@@ -3,13 +3,13 @@ from pathlib import Path
 import hashlib,json,re,sys
 root=Path(__file__).resolve().parents[1]
 allowed={'.c','.h','.py','.ps1','.md','.json','.txt','.yml','.yaml'}
-ignored={'.git','build','runtime','.cache','.venv','__pycache__'}
+ignored={'.git','build','runtime','original','.cache','.venv','__pycache__'}
 count=0
 for p in root.rglob('*'):
  parts=p.relative_to(root).parts
  if not p.is_file() or parts[0] in ignored or '__pycache__' in parts:continue
  rel=p.relative_to(root).as_posix()
- assert parts[0] in {'src','tests','scripts','tools','docs','.github'} or len(parts)==1 and p.name in {'.gitignore','.gitattributes','README.md','READMD.md','CONTRIBUTING.md','LICENSE','NOTICE','SECURITY.md'},('Unexpected public path',rel)
+ assert parts[0] in {'src','tests','scripts','tools','docs','.github'} or len(parts)==1 and p.name in {'.gitignore','.gitattributes','README.md','READMD.md','CHANGELOG.md','CONTRIBUTING.md','LICENSE','NOTICE','SECURITY.md'},('Unexpected public path',rel)
  assert p.name in {'.gitignore','.gitattributes'} or p.suffix in allowed,rel
  assert p.stat().st_size<1_000_000,('Unexpected large payload',rel)
  text=p.read_text(encoding='utf-8-sig')

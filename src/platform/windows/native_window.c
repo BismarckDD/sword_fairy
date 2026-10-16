@@ -2,6 +2,7 @@
 #define UNICODE
 #define _UNICODE
 #include <windows.h>
+#include <mmsystem.h>
 #include "native_window.h"
 static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
     JxNativeWindow *d=(JxNativeWindow *)GetWindowLongPtrW(hwnd,GWLP_USERDATA);
@@ -22,7 +23,7 @@ static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
             d->pressed[scan]=0;d->scan(d->opaque,(uint8_t)(scan|0x80));
         }
         return 0;
-    case WM_TIMER:d->ticks++;d->tick(d->opaque);InvalidateRect(hwnd,NULL,FALSE);return 0;
+    case WM_TIMER:InvalidateRect(hwnd,NULL,FALSE);return 0;
     case WM_PAINT: {
         d->paints++;
         PAINTSTRUCT paint;HDC dc=BeginPaint(hwnd,&paint);RECT size;GetClientRect(hwnd,&size);
@@ -41,7 +42,7 @@ static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
         StretchDIBits(dc,0,0,size.right,size.bottom,0,0,(int)width,(int)height,d->pixels,&info,DIB_RGB_COLORS,SRCCOPY);
         EndPaint(hwnd,&paint);return 0;
     }
-    case WM_CLOSE:d->closed=1;DestroyWindow(hwnd);d->handle=NULL;return 0;
+    case WM_CLOSE:jx_native_window_close(d);return 0;
     default:return DefWindowProcW(hwnd,message,w,l);
     }
 }
@@ -55,18 +56,49 @@ int jx_native_window_open(JxNativeWindow *d) {
         CW_USEDEFAULT,CW_USEDEFAULT,rectangle.right-rectangle.left,rectangle.bottom-rectangle.top,
         NULL,NULL,instance,d);
     if(!hwnd)return 0;
-    d->closed=0;
+    d->closed=0;d->ticks=0;d->retrace_frame=0;d->tick_origin=GetTickCount64();
+    LARGE_INTEGER frequency,counter;
+    QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&counter);
+    d->retrace_frequency=(uint64_t)frequency.QuadPart;d->retrace_origin=(uint64_t)counter.QuadPart;
     if(!SetTimer(hwnd,1,55,NULL)){DestroyWindow(hwnd);d->handle=NULL;return 0;}
+    d->timer_resolution=timeBeginPeriod(1)==TIMERR_NOERROR;
     ShowWindow(hwnd,SW_SHOW);UpdateWindow(hwnd);return 1;
+}
+void jx_native_window_sync_ticks(JxNativeWindow *d) {
+    /* Discard time spent preparing the opening audio, preserving ticks
+     * already delivered. Do not alter the independent VGA refresh clock. */
+    d->tick_origin=GetTickCount64()-(uint64_t)d->ticks*65536000/1193182;
 }
 int jx_native_window_pump(JxNativeWindow *d) {
     MSG message;
     while(PeekMessageW(&message,NULL,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}
     if(d->closed)return 0;
+    /* WM_TIMER rounds intervals and coalesces missed messages. Counting one
+     * DOS tick per message slows subtitles relative to independently playing
+     * audio. Derive BIOS ticks from elapsed time (PIT / 65536) instead. */
+    uint64_t due=(GetTickCount64()-d->tick_origin)*1193182/65536000;
+    while((uint64_t)d->ticks<due){d->ticks++;d->tick(d->opaque);}
     Sleep(1);return 1;
+}
+void jx_native_window_present(JxNativeWindow *d) {
+    if(d->handle){InvalidateRect((HWND)d->handle,NULL,FALSE);UpdateWindow((HWND)d->handle);}
+}
+int jx_native_window_wait_retrace(JxNativeWindow *d) {
+    /* Mode 13h VGA refreshes at approximately 70 Hz. Palette fades wait on
+     * this device boundary, independently of the 18.2 Hz BIOS timer. */
+    LARGE_INTEGER counter;QueryPerformanceCounter(&counter);
+    uint64_t frame=((uint64_t)counter.QuadPart-d->retrace_origin)*70/d->retrace_frequency;
+    while(frame<=d->retrace_frame){
+        if(!jx_native_window_pump(d))return 0;
+        QueryPerformanceCounter(&counter);
+        frame=((uint64_t)counter.QuadPart-d->retrace_origin)*70/d->retrace_frequency;
+    }
+    d->retrace_frame=frame;
+    return 1;
 }
 void jx_native_window_close(JxNativeWindow *d) {
     if(d->handle)DestroyWindow((HWND)d->handle);d->handle=NULL;d->closed=1;
+    if(d->timer_resolution){timeEndPeriod(1);d->timer_resolution=0;}
 }
 /* Bounded verification uses the same Win32 message path as keyboard input. */
 int jx_native_window_post_scan(JxNativeWindow *d,uint8_t scan) {
