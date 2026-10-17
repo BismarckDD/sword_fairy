@@ -14,6 +14,8 @@ static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
     switch(message) {
     case WM_KEYDOWN:case WM_SYSKEYDOWN:case WM_KEYUP:case WM_SYSKEYUP: {
         uint8_t scan=(uint8_t)((l>>16)&0x7f);
+        /* One confirmation per press; ignore OS autorepeat for action keys. */
+        if((message==WM_KEYDOWN || message==WM_SYSKEYDOWN) && (l&((LPARAM)1<<30)) && (scan==0x1c || scan==0x39 || scan==1))return 0;
         d->pressed[scan]=(uint8_t)(message==WM_KEYDOWN || message==WM_SYSKEYDOWN);
         if(message==WM_KEYUP || message==WM_SYSKEYUP)scan|=0x80;
         d->scan(d->opaque,scan);return 0;

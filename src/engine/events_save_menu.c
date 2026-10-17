@@ -55,7 +55,7 @@ void jx_save_game_menu(JxEventContext *c,JxFarPointer work) {
         }
         type=jx_far_word(c,work.segment,work.offset);
         key=jx_far_word(c,work.segment,(uint16_t)(work.offset+2));
-        if(type!=0 || key!=0x1c) continue;
+        if(type!=0 || (key!=0x1c && key!=0x39)) continue;
         save_background(c,0x1c6c,save_buffer(c,0));
         JxFarPointer filename=save_work(work,36),digits=save_work(work,72);
         (void)JX_CALL(c,0x1000,0x2448,filename.offset,filename.segment,0x64b,c->data_segment);

@@ -61,7 +61,7 @@ uint16_t jx_item_menu(JxEventContext *c,JxFarPointer work) {
                 page_counter=(uint16_t)(page_counter+1);
             }
         }
-        if(jx_far_word(c,input.segment,input.offset)==0 && jx_far_word(c,input.segment,(uint16_t)(input.offset+2))==0x1c)
+        if(jx_far_word(c,input.segment,input.offset)==0 && (jx_far_word(c,input.segment,(uint16_t)(input.offset+2))==0x1c || jx_far_word(c,input.segment,(uint16_t)(input.offset+2))==0x39))
             return item_menu_finish(c,item_menu_value(c,row,column,scroll));
     }
 }

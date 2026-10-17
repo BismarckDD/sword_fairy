@@ -1,5 +1,5 @@
 {
-  "scope": "Current source based on the verified local reconstruction, including native presentation timing fixes and the 99-slot save browser; no original game resources or binaries included.",
+  "scope": "Current source based on the verified local reconstruction, including native presentation timing fixes, the 99-slot save browser and game-native menu hierarchy; no original game resources or binaries included.",
   "files": [
     {
       "path": "src/engine/actor.c",
@@ -7,7 +7,7 @@
     },
     {
       "path": "src/engine/event_engine.h",
-      "sha256": "dbcdd0c9588f2af975bdc47f906853d489d01bb02edb98cad260fa32a5740e91"
+      "sha256": "633692b3efcca901fa94abc8b340d6fcd56fcda9f6c355c0ceea3578b186d5c9"
     },
     {
       "path": "src/engine/events_005.c",
@@ -47,7 +47,7 @@
     },
     {
       "path": "src/engine/events_action_menu.c",
-      "sha256": "5f7e29e4f5cd80683b8ef1a9ef2c9015f81cb8a0da0c8de655fde58c6265aaa7"
+      "sha256": "36853f448b3ed28412971d7743447de1abef1b58af0d50a3bbed4c01e698abf3"
     },
     {
       "path": "src/engine/events_actor_bridge.c",
@@ -255,7 +255,7 @@
     },
     {
       "path": "src/engine/events_dialogue_render.c",
-      "sha256": "179a84c031164e6bd2848343df29f4326535c93e057b8fa368585369aaf1bb74"
+      "sha256": "cf5216116d91a4c2d86656a3513713370b0a51af0b653d7f33ac8f13c5e06c2a"
     },
     {
       "path": "src/engine/events_dice_animation.c",
@@ -379,7 +379,7 @@
     },
     {
       "path": "src/engine/events_game_loop.c",
-      "sha256": "bcea858ba5d62812fb6302a8e1b464b202b82c096a04feed0a0964c1d5c908c4"
+      "sha256": "76880fef7bb0722a7e030e0bd92951de02d15f2dd66beca83ac3e26c2f6ac787"
     },
     {
       "path": "src/engine/events_heap.c",
@@ -418,12 +418,16 @@
       "sha256": "e4f9e4a6e62cee11f2a2d50eff5dd9f513cc2d2b3340994f50c1ea467bf9fbba"
     },
     {
+      "path": "src/engine/events_item_description.c",
+      "sha256": "4ef48e0c94f57ee8c15f7c6cbe4d4cb9c6efbf4e12fa19af369b2dc2f399142b"
+    },
+    {
       "path": "src/engine/events_item_menu.c",
-      "sha256": "6811b761485e2f93aaeb3a5c11b2abaa8e1f26bd71c1ad274178ab37e1c62377"
+      "sha256": "3162604822807b23ea725aff3d7d19dc781b61ca81ba2abbe54ea7171aa4fae4"
     },
     {
       "path": "src/engine/events_item_menu_render.c",
-      "sha256": "a93236e3c7618fa0e92b5c098c14de43b93ed5de3d52d3a7acbd4f3cc7747564"
+      "sha256": "9c3d0716cfbd3d28b8ce77b5c6156471e48e4019df5a64c7f278b48168fdd25c"
     },
     {
       "path": "src/engine/events_keyboard_state.c",
@@ -459,7 +463,7 @@
     },
     {
       "path": "src/engine/events_load_menu.c",
-      "sha256": "d5c0134b53f16889174423f2345eee036eba9e48fa213611be03230a60b75c61"
+      "sha256": "ecd2e583c9a1183bf36e44e3508f7983d1315f6fce24aa81637354ed7ff0a368"
     },
     {
       "path": "src/engine/events_map_load.c",
@@ -627,7 +631,7 @@
     },
     {
       "path": "src/engine/events_save_menu.c",
-      "sha256": "8bfe0d2c22481e7236f9b1a693c67cd55d0ac38d383375b2aec3e9eb496ce52e"
+      "sha256": "dfe35bfeb9f329ea02261e1d7f9322488b53beca2351f4a9cb3ffc348bac0672"
     },
     {
       "path": "src/engine/events_scan_input.c",
@@ -679,7 +683,7 @@
     },
     {
       "path": "src/engine/events_skill_menu.c",
-      "sha256": "dcc346390eb9d6c45a19060775a265ccd2b299dce01f6189e85d038b24eb467a"
+      "sha256": "5188ceb754e48f82a4005cce155336f58ee745bb9622773f8a296008674482f2"
     },
     {
       "path": "src/engine/events_skill_menu_render.c",
@@ -906,16 +910,32 @@
       "sha256": "ad22b1cbb3d11d6669edae1b88761a383ecdaba235271d0530c3607a6351234a"
     },
     {
+      "path": "src/platform/windows/native_saves.c",
+      "sha256": "f4d7f3a5121f527c6f73c57e13aae16a1b0bf41a689957bd775c80368f7132f8"
+    },
+    {
       "path": "src/platform/windows/native_window.c",
-      "sha256": "2225993be1f95f74d1c18216a02b45e21716dc4c42a8ffe80f58f1675d6a9637"
+      "sha256": "ecb16ba7b10ddef9bc168c2df5d0a10c8f9025f2e19ccc58246a36e9f896e97a"
     },
     {
       "path": "src/platform/windows/native_window.h",
-      "sha256": "e970837970cf20375d2f2d2be1edd245193f74ecbbb00cb55e27ba144a625d38"
+      "sha256": "92b486714550212d9144126649f355be03a1a862e1ffad89d19cfed90921c3f5"
     },
     {
       "path": "src/platform/windows/resource_host.c",
-      "sha256": "cc897b724fe82139311b29514664c0bc35c5b59651c3086ae7572c2d844068cd"
+      "sha256": "465160081aa1a639f4c4964e34a32605a075a5b664b9a8816a410692cb810f25"
+    },
+    {
+      "path": "tests/item_description.c",
+      "sha256": "e75540ac593e22c3ac17b87cae3214eeff4f34c2bce1f74082e68be042709bcd"
+    },
+    {
+      "path": "tests/menu_navigation.c",
+      "sha256": "eee8f47754d2a1cf58b0b05ffc4e65e07fa8a8a55a358f3db08f5099398134d0"
+    },
+    {
+      "path": "tests/native_save_browser.c",
+      "sha256": "151beb8c72bf656305c4af312bd1bbf336d49576dd1d51edcb853a4cca3026c1"
     },
     {
       "path": "tests/routes/blood_walkthrough_route.h",
@@ -1320,14 +1340,6 @@
     {
       "path": "tools/extract_memory.py",
       "sha256": "df9cf6d7a574bb55e1bdf9e0ac1667f5315778264fb9d6a1ab0c3edc13661bec"
-    },
-    {
-      "path": "src/platform/windows/native_saves.c",
-      "sha256": "ed10fdcd3ee8a5867ca12f1b0cd65dec6dc59f7ab8a25723b6b3de4e3ab73ecd"
-    },
-    {
-      "path": "tests/native_save_browser.c",
-      "sha256": "7888f59d528d83cfbc03ebfa9a98a42e6e6590cc9cf660618362891b1e74ca9d"
     }
   ]
 }

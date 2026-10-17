@@ -51,7 +51,7 @@ uint16_t jx_skill_menu(JxEventContext *c,uint16_t actor,JxFarPointer work) {
                 page_counter=(uint16_t)(page_counter+1);
             }
         }
-        if(jx_far_word(c,input.segment,input.offset)==0 && jx_far_word(c,input.segment,(uint16_t)(input.offset+2))==0x1c) {
+        if(jx_far_word(c,input.segment,input.offset)==0 && (jx_far_word(c,input.segment,(uint16_t)(input.offset+2))==0x1c || jx_far_word(c,input.segment,(uint16_t)(input.offset+2))==0x39)) {
             result=(uint16_t)skill_menu_entry(c,actor,row,column);break;
         }
     }

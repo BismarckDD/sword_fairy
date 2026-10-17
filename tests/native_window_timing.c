@@ -7,9 +7,9 @@
 static JxNativeWindow window;
 static JxVideoModel video;
 static uint8_t palette[768];
-static unsigned callbacks;
+static unsigned callbacks,confirmations;
 static void tick(void *opaque){(void)opaque;++callbacks;}
-static void scan(void *opaque,uint8_t value){(void)opaque;(void)value;}
+static void scan(void *opaque,uint8_t value){(void)opaque;if(value==0x1c || value==0x39 || value==1)++confirmations;}
 
 int main(void){
     window.video=&video;window.palette=palette;window.tick=tick;window.scan=scan;
@@ -47,6 +47,15 @@ int main(void){
     assert(jx_native_window_pump(&window));
     assert(callbacks==before+1);
     puts("PASS: opening audio preparation excluded from subtitle clock");
+    const unsigned keys[]={0x1c,0x39,1};
+    for(unsigned i=0;i<3;i++){
+        LPARAM detail=(LPARAM)keys[i]<<16;
+        assert(PostMessageW((HWND)window.handle,WM_KEYDOWN,0,detail));
+        assert(PostMessageW((HWND)window.handle,WM_KEYDOWN,0,detail|((LPARAM)1<<30)));
+        assert(PostMessageW((HWND)window.handle,WM_KEYUP,0,detail|((LPARAM)1<<31)));
+    }
+    assert(jx_native_window_pump(&window));assert(confirmations==3);
+    puts("PASS: Enter/Space/Escape autorepeat cannot cause multiple confirmations");
     assert(jx_native_window_post_close(&window));
     assert(!jx_native_window_pump(&window));
     return 0;

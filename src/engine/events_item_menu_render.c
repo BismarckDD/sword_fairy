@@ -1,13 +1,16 @@
 /* 1F2A:8F78 item panel; original arithmetic is expressed directly in C. */
 #include "event_engine.h"
+#include <string.h>
 static uint16_t item_panel_slot(uint16_t row,uint16_t column,uint16_t scroll) {
     return (uint16_t)(0x878a+(((row+scroll)*2u+column)*4u));
 }
 /* 1F2A:8F78. Reserve30-byte frame; number starts at work+8. */
 void jx_item_menu_render(JxEventContext *c,uint16_t column,uint16_t row,uint16_t scroll,JxFarPointer work) {
-    uint32_t sum=(uint32_t)jx_word(c,0x2eb0)+0x0c30;
-    uint16_t offset=(uint16_t)sum,segment=(uint16_t)(jx_word(c,0x2eb2)+((sum>>16)<<12));
-    (void)JX_CALL(c,0x1832,0x1c6c,150,0,170,200,offset,segment);
+    /* Restore the original complete backdrop so old text disappears without
+     * a solid fill, and the decorative item picture remains intact. */
+    for(uint16_t slot=0;slot<4;slot++)
+        (void)JX_CALL(c,0x1503,0x007d,slot,(uint16_t)(79+slot),jx_word(c,0x9332));
+    (void)JX_CALL(c,0x1832,0x1c6c,0,0,320,200,jx_word(c,0x5858),jx_word(c,0x585a));
     JxFarPointer number={(uint16_t)(work.offset+8),work.segment};
     for(uint16_t r=0;r<10;r++)for(uint16_t col=0;col<2;col++) {
         if(r==row && col==column)(void)JX_CALL(c,0x1f2a,0x06f2,47,0,77);
@@ -29,4 +32,14 @@ void jx_item_menu_render(JxEventContext *c,uint16_t column,uint16_t row,uint16_t
     (void)JX_CALL(c,0x1000,0x0636,(uint16_t)file,(uint16_t)(file>>16));
     (void)JX_CALL(c,0x1832,0x1884,40,29,60,52,255);
     (void)JX_CALL(c,0x1832,0x1a28,40,29,60,52,jx_word(c,0x2eb0),jx_word(c,0x2eb2),255);
+    /* Real item descriptions use up to four lines, below the entire picture.
+     * Retain room for extended data without clipping text at the screen edge. */
+    JxItemDescription description;jx_item_description(c,(uint16_t)index,&description);
+    uint16_t text_y=description.count<=4?132:(uint16_t)(198-16*description.count);
+    (void)JX_CALL(c,0x1f2a,0x06f2,80,0,77);
+    for(unsigned line=0;line<description.count;line++) {
+        size_t length=strlen(description.lines[line]);
+        for(unsigned k=0;k<=length;k++)jx_far_set_byte(c,work,(uint16_t)k,(uint8_t)description.lines[line][k]);
+        (void)JX_CALL(c,0x1f2a,0x0728,8,(uint16_t)(text_y+16*line),work.offset,work.segment);
+    }
 }

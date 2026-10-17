@@ -31,8 +31,9 @@ static void menu_cd_play(JxEventContext *c,uint16_t track) {
 }
 /* 1F2A:80FA. work corresponds to the34-byte BP frame. Input writes
  * start at+2, CD status at+20. Input polling intentionally has no timeout. */
-uint16_t jx_action_menu(JxEventContext *c,uint16_t x,uint16_t y,uint16_t count,JxFarPointer labels,JxFarPointer work) {
-    uint16_t selected=0,ticks=0;
+static uint16_t action_menu_run(JxEventContext *c,uint16_t x,uint16_t y,uint16_t count,JxFarPointer labels,JxFarPointer work,uint16_t *selection,int callbacks) {
+    if(!count || count>5)return 0xffff;
+    uint16_t selected=*selection<count?*selection:0,ticks=0;
     JxFarPointer p=menu_buffer(c,0,count);
     (void)JX_CALL(c,0x1832,0x1e88,x,y,72,(uint16_t)(count*20u),p.offset,p.segment);
     JxFarPointer src=menu_buffer(c,1,count);p=menu_buffer(c,0,count);
@@ -68,7 +69,7 @@ uint16_t jx_action_menu(JxEventContext *c,uint16_t x,uint16_t y,uint16_t count,J
             }
         } else if(type==1) {
             uint16_t key=jx_far_word(c,input.segment,(uint16_t)(input.offset+2));
-            if(key==1){menu_restore(c,x,y,count);menu_reset_callbacks(c);return 0xffff;}
+            if(key==1){menu_restore(c,x,y,count);if(callbacks)menu_reset_callbacks(c);*selection=selected;return 0xffff;}
             if(key==0x48 || key==0x50) {
                 (void)JX_CALL(c,0x1f2a,0x155c,1);
                 uint16_t previous=selected;
@@ -79,12 +80,21 @@ uint16_t jx_action_menu(JxEventContext *c,uint16_t x,uint16_t y,uint16_t count,J
                 (void)JX_CALL(c,0x1f2a,0x06f2,80,0,77);menu_text(c,x,y,labels,previous);
             }
         }
-        if(jx_far_word(c,input.segment,input.offset)==0 && jx_far_word(c,input.segment,(uint16_t)(input.offset+2))==0x1c) {
+        if(jx_far_word(c,input.segment,input.offset)==0 && (jx_far_word(c,input.segment,(uint16_t)(input.offset+2))==0x1c || jx_far_word(c,input.segment,(uint16_t)(input.offset+2))==0x39)) {
             menu_restore(c,x,y,count);
+            *selection=selected;
+            if(!callbacks)return selected;
             uint16_t table=(uint16_t)(0x8722+selected*4u);
             uint16_t offset=jx_word(c,table),segment=jx_word(c,(uint16_t)(table+2));
             (void)JX_CALL0(c,segment,offset);
             menu_reset_callbacks(c);return 0;
         }
     }
+}
+
+uint16_t jx_action_menu(JxEventContext *c,uint16_t x,uint16_t y,uint16_t count,JxFarPointer labels,JxFarPointer work) {
+    uint16_t selection=0;return action_menu_run(c,x,y,count,labels,work,&selection,1);
+}
+uint16_t jx_menu_select(JxEventContext *c,uint16_t x,uint16_t y,uint16_t count,JxFarPointer labels,JxFarPointer work,uint16_t *selection) {
+    return action_menu_run(c,x,y,count,labels,work,selection,0);
 }

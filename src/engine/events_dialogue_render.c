@@ -90,7 +90,7 @@ static JxDialogueFlow render(JxEventContext *c,uint16_t portrait,JxFarPointer te
                         return JX_DIALOGUE_GLYPH_STALLED;
                     break;
                 }
-            } else if(event.type==0 && event.value1==0x39 && mode==0) {
+            } else if(event.type==0 && (event.value1==0x39 || event.value1==0x1c) && mode==0) {
                 for(unsigned row=0;row<4;row++)
                     if(draw(opaque,(uint16_t)(x+10),(uint16_t)(y+2+row*20),lines[row])==JX_GLYPH_STALLED)
                         return JX_DIALOGUE_GLYPH_STALLED;

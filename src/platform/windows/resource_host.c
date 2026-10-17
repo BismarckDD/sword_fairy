@@ -131,6 +131,7 @@ typedef struct {
     JxEngineCall input_fallback;
     void *input_fallback_opaque;
     unsigned menu_probe,input_probe_step,adaptive_resume_slot,adaptive_death_loaded;
+    const uint16_t (*ui_events)[2];unsigned ui_count,ui_index;const char *ui_name;
     unsigned test_supply_stage,test_supply_edits;
     uint16_t contact_seg,contact_off;
     unsigned contact_hits;
@@ -181,7 +182,7 @@ typedef struct {
 static int host_save_browser(void *opaque,int mode) {
     Host *h=opaque;
     if(!h->interactive_entry || !h->window.handle || h->story_probe)return -2;
-    return jx_native_save_browser(&h->window,jx_ds(&h->c),mode);
+    return jx_native_game_save_browser(&h->window,&h->c,mode);
 }
 static Host host;
 static int input_poll(void *,JxInputEvent *);
@@ -926,8 +927,21 @@ static int adaptive_can_finish_with_carried_tea(Host *h) {
     }
     return needed<=tea && jx_word(&h->c,0x6614)<=power*90/100;
 }
+static int ui_test_input(Host *h,JxInputEvent *event) {
+    if(h->ui_index>=h->ui_count)fail(h,"menu regression exhausted input");
+    char path[160];snprintf(path,sizeof path,"main_decompiled/build/menu_%s_%02u.ppm",h->ui_name,h->ui_index);
+    FILE *f=fopen(path,"wb");if(!f)fail(h,"menu screenshot failed");fprintf(f,"P6\n320 200\n255\n");
+    unsigned start=(unsigned)h->video->start_high<<8;
+    for(unsigned y=0;y<200;y++)for(unsigned x=0;x<320;x++) {
+        unsigned color=h->video->planes[x&3][(start+y*80+x/4)&65535];
+        for(unsigned rgb=0;rgb<3;rgb++)fputc(h->palette[color*3+rgb]*4,f);
+    }
+    if(fclose(f))fail(h,"menu screenshot close failed");
+    *event=(JxInputEvent){h->ui_events[h->ui_index][0],h->ui_events[h->ui_index][1],0,0};h->ui_index++;return 0;
+}
 static uint32_t native_input_dispatch(void *p,uint16_t s,uint16_t o,const uint16_t *a,size_t n) {
     Host *h=p;
+    if(h->ui_events && s==0x1f2a && o==0xc1f2 && n==2){JxInputEvent event;ui_test_input(h,&event);uint32_t at=((uint32_t)a[1]*16+a[0])&0xfffff;h->memory[at]=(uint8_t)event.type;h->memory[at+1]=0;h->memory[at+2]=(uint8_t)event.value1;h->memory[at+3]=0;memset(h->memory+at+4,0,4);return 0;}
     if(h->test_supply_stage && s==0x1f2a && o==0x4934 && n==3)test_max_supplies(h,a[0]);
     int adaptive_tactics=h->adaptive_walkthrough && h->walkthrough_phase>=92;
     if(h->adaptive_walkthrough && h->walkthrough_phase>=190 && jx_word(&h->c,0x9334)==81){
@@ -2585,6 +2599,7 @@ static void window_shutdown(Host *h) {
 }
 static int input_poll(void *p,JxInputEvent *event) {
     Host *h=p;
+    if(h->ui_events)return ui_test_input(h,event);
     if(h->story_probe || h->saved_walkthrough) {
         if(++h->story_poll_steps>200000){fprintf(stderr,"input exhausted: creditframes=%u pos=%u mode=%u enabled=%u head=%u tail=%u\n",h->credits_frames,h->credits_position,jx_word(&h->c,0x0e5a),jx_word(&h->c,0x0868),jx_word(&h->c,0x0864),jx_word(&h->c,0x0866));fail(h,"opening test input scenario exhausted");}
         if((!h->cutscene_fixture && !(h->adaptive_walkthrough && h->credits_frames)) || jx_word(&h->c,0x0864)==jx_word(&h->c,0x0866))timer_tick(h);
@@ -2678,6 +2693,40 @@ static int video_address_space_probe(Host *h,unsigned sample) {
     if(fwrite(h->memory,1,sizeof h->memory,f)!=sizeof h->memory || fwrite(h->video->planes,1,sizeof h->video->planes,f)!=sizeof h->video->planes || fwrite(h->video->latches,1,4,f)!=4 || fputc(h->video->mode,f)==EOF || fclose(f))fail(h,"video probe write failed");
     printf("native video address space probe PASS: sample=%u source=%u destination=%u\n",sample,pages[sample][1],pages[sample][0]);
     return 0;
+}
+static void item_description_regression(Host *h) {
+    uint8_t inventory[256];memcpy(inventory,jx_ds(&h->c)+0x878a,sizeof inventory);
+    uint16_t battle=jx_word(&h->c,0xacea);memset(jx_ds(&h->c)+0x878a,0,sizeof inventory);
+    static const uint16_t items[]={42,57,40,41,59,15};
+    for(unsigned i=0;i<6;i++){jx_set_word(&h->c,(uint16_t)(0x878a+4*i),items[i]);jx_set_word(&h->c,(uint16_t)(0x878c+4*i),5);}
+    static const uint16_t input[][2]={{1,0x4d},{1,0x50},{1,0x4b},{1,0x50},{1,0x4d},{1,1}};
+    jx_set_word(&h->c,0xacea,1);h->ui_events=input;h->ui_count=6;h->ui_index=0;h->ui_name="item_effects";
+    if(jx_item_menu(&h->c,(JxFarPointer){0,0x9c00})!=0xffff || h->ui_index!=6)fail(h,"item description navigation mismatch");
+    for(unsigned i=0;i<6;i++)if(jx_word(&h->c,(uint16_t)(0x878c+4*i))!=5)fail(h,"description consumed inventory");
+    h->ui_events=NULL;memcpy(jx_ds(&h->c)+0x878a,inventory,sizeof inventory);jx_set_word(&h->c,0xacea,battle);
+    printf("native item description PASS: real medicine/maxima/stat/projectile/quest data, both columns, selection redraw and unchanged quantities\n");
+}
+static void menu_regression(Host *h) {
+    static const uint16_t system_events[][2]={{1,1},{1,0x50},{1,0x50},{1,0x50},{0,0x1c},{0,0x1c},{1,0x50},{0,0x39},{1,0x50},{1,0x50},{1,0x50},{0,0x1c},{0,0x39},{1,1},{1,1}};
+    uint16_t sound=jx_word(&h->c,0x050e),music=jx_word(&h->c,0x050c);
+    h->ui_events=system_events;h->ui_count=sizeof system_events/sizeof system_events[0];h->ui_index=0;h->ui_name="system";
+    if(jx_game_loop_step(&h->c,(JxFarPointer){0,0x9600})!=JX_GAME_LOOP_PROCESSED || h->ui_index!=h->ui_count)fail(h,"menu hierarchy return mismatch");
+    if(jx_word(&h->c,0x050e)!=(uint16_t)(1-sound))fail(h,"sound toggle mismatch");
+    if(jx_word(&h->c,0x050c)!=(jx_word(&h->c,0x31b4)?(uint16_t)(1-music):music))fail(h,"music toggle mismatch");
+    static const uint16_t screens[][2]={{1,1},{0,0x39},{0,0x1c},{1,0x50},{0,0x1c},{1,1},{1,0x50},{0,0x39},{1,1},{1,1}};
+    h->ui_events=screens;h->ui_count=sizeof screens/sizeof screens[0];h->ui_index=0;h->ui_name="screens";
+    if(jx_game_loop_step(&h->c,(JxFarPointer){0,0x9600})!=JX_GAME_LOOP_PROCESSED || h->ui_index!=h->ui_count)fail(h,"status skill item return mismatch");
+    h->window.video=h->video;h->window.palette=h->palette;h->window.mode=&h->legacy_mode;
+    unsigned start=(unsigned)h->video->start_high<<8;
+    for(unsigned y=0;y<200;y++)for(unsigned x=0;x<320;x++) {
+        unsigned color=h->video->planes[x&3][(start+y*80+x/4)&65535];const uint8_t *rgb=h->palette+color*3;
+        h->window.pixels[y*320+x]=((uint32_t)rgb[0]*4<<16)|((uint32_t)rgb[1]*4<<8)|(rgb[2]*4);
+    }
+    (void)jx_native_game_save_browser(&h->window,&h->c,2);
+    static const uint16_t browser_events[][2]={{1,0x4b},{1,0x48},{1,1}};
+    h->ui_events=browser_events;h->ui_count=3;h->ui_index=0;h->ui_name="browser";
+    if(jx_native_game_save_browser(&h->window,&h->c,0)!=-1 || h->ui_index!=3)fail(h,"browser paging cancel mismatch");
+    h->ui_events=NULL;printf("native menu system PASS: four main options, system toggles, safe exit default, status/skill/item returns, both confirmation keys, browser page 10 and cancellation\n");
 }
 int main(int argc,char **argv) {
     int resume_walk=argc>2 && strcmp(argv[2],"--adaptive-load-walkthrough-probe")==0;
@@ -2826,10 +2875,12 @@ int main(int argc,char **argv) {
     int story_continuation_probe=argc>2 && strcmp(argv[2],"--story-continuation-probe")==0;
     int battle_probe=argc>2 && strcmp(argv[2],"--battle-probe")==0;
     int shutdown_probe=sound_shutdown_probe || (argc>2 && strcmp(argv[2],"--shutdown-probe")==0);
+    int item_description_probe=argc>2 && strcmp(argv[2],"--item-description-probe")==0;
+    int menu_system_probe=argc>2 && strcmp(argv[2],"--menu-system-probe")==0;
     int main_menu_probe=argc>2 && strcmp(argv[2],"--main-menu-probe")==0;
     int save_probe=argc>2 && strcmp(argv[2],"--save-probe")==0;
     int load_probe=resume_walk || shutdown_probe || main_menu_probe || save_probe || (argc>2 && strcmp(argv[2],"--load-probe")==0);
-    int game_probe=original_init_probe || board_probe || dice_probe || ending_probe || ending_animation_probe || credits_probe || cd_probe || disc_probe || menus_probe || scene_probe || interact_probe || story_continuation_probe || window_probe || sound_probe || battle_probe || load_probe || (argc>2 && strcmp(argv[2],"--game-probe")==0);
+    int game_probe=item_description_probe || menu_system_probe || original_init_probe || board_probe || dice_probe || ending_probe || ending_animation_probe || credits_probe || cd_probe || disc_probe || menus_probe || scene_probe || interact_probe || story_continuation_probe || window_probe || sound_probe || battle_probe || load_probe || (argc>2 && strcmp(argv[2],"--game-probe")==0);
     int game=game_probe || (argc>2 && strcmp(argv[2],"--game")==0);
     h->portable_media=(unsigned)(disc_probe || scene_probe || window_probe || (argc>2 && strcmp(argv[2],"--game")==0));
     for(int option=3;option<argc;option++)if(strcmp(argv[option],"--strict-cd")==0)h->portable_media=0;
@@ -3076,6 +3127,8 @@ int main(int argc,char **argv) {
     if(flow){fprintf(stderr,"scene flow=%u\n",(unsigned)flow);fail(h,"scene drawing stopped");}
     if(h->video->error)fail(h,"unsupported VGA operation");
 world_ready:
+    if(item_description_probe){item_description_regression(h);return 0;}
+    if(menu_system_probe || main_menu_probe){menu_regression(h);return 0;}
     if(resume_walk){
         h->adaptive_resume_slot=resume_slot;
         h->original_entry_probe=1;h->entry_world=1;h->entry_start=jx_word(&h->c,0x585e);

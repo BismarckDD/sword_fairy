@@ -13,7 +13,7 @@
 typedef struct {uint32_t magic,hash; FILETIME time; uint32_t pixels[PREVIEW_PIXELS];} Preview;
 typedef struct {int state,scene,preview; FILETIME time; uint32_t hash;} Slot;
 typedef struct {
-    JxNativeWindow *window; uint8_t *ds; HWND hwnd,list,detail;
+    JxNativeWindow *window; uint8_t *ds; JxEventContext *c;
     Slot slots[SLOTS]; Preview image; int selected,writing,done,result;
 } Browser;
 static int last_slot;
@@ -52,25 +52,6 @@ static void time_text(FILETIME time,wchar_t *text,size_t size) {
     if(!FileTimeToLocalFileTime(&time,&local)||!FileTimeToSystemTime(&local,&st)){swprintf(text,size,L"时间未知");return;}
     swprintf(text,size,L"%04u-%02u-%02u %02u:%02u:%02u",st.wYear,st.wMonth,st.wDay,st.wHour,st.wMinute,st.wSecond);
 }
-static void refresh(Browser *b) {
-    SendMessageW(b->list,LB_RESETCONTENT,0,0);int page=b->selected/10;
-    for(int i=page*10;i<SLOTS && i<page*10+10;i++) {
-        wchar_t line[160],time[40],place[40];Slot *s=&b->slots[i];time_text(s->time,time,40);
-        if(!s->state)swprintf(line,160,L"%02d    空存档",i+1);
-        else if(s->state==2)swprintf(line,160,L"%02d    存档异常",i+1);
-        else {scene_text(s->scene,place,40);swprintf(line,160,L"%02d    %ls    %ls",i+1,place,time);}
-        SendMessageW(b->list,LB_ADDSTRING,0,(LPARAM)line);
-    }
-    SendMessageW(b->list,LB_SETCURSEL,b->selected%10,0);
-    Slot *s=&b->slots[b->selected];wchar_t caption[120],text[200],time[40],place[40];
-    swprintf(caption,120,L"%ls · 第 %d / 10 页 · 存档 %02d",b->writing?L"保存游戏":L"读取存档",page+1,b->selected+1);SetWindowTextW(b->hwnd,caption);
-    time_text(s->time,time,40);
-    if(s->state==1){scene_text(s->scene,place,40);swprintf(text,200,L"%ls\n%ls\n%ls",place,time,s->preview?L"保存时间":L"文件修改时间 · 暂无预览");}
-    else swprintf(text,200,L"%ls",s->state?L"存档异常，无法读取":L"空存档");
-    SetWindowTextW(b->detail,text);memset(&b->image,0,sizeof b->image);
-    if(s->preview){char path[160];path_for(path,sizeof path,b->selected,"preview");FILE *f=fopen(path,"rb");if(f){if(fread(&b->image,1,sizeof b->image,f)!=sizeof b->image)b->image.magic=0;fclose(f);}}
-    InvalidateRect(b->hwnd,NULL,TRUE);
-}
 static int commit_save(Browser *b) {
     static const unsigned blocks[][2]={{0x8894,2},{0x889a,2},{0xd04e,1088},{0x8752,312},{0x9334,2},{0x3466,220},{0x665a,6600},{0xb686,6600},{0xacec,2200}};
     uint8_t bytes[SAVE_SIZE];size_t at=0;
@@ -83,63 +64,124 @@ static int commit_save(Browser *b) {
     path_for(path,sizeof path,b->selected,"preview");path_for(temp,sizeof temp,b->selected,"preview.tmp");f=fopen(temp,"wb");ok=f!=NULL;
     if(f){if(fwrite(&p,1,sizeof p,f)!=sizeof p)ok=0;if(fflush(f))ok=0;if(fclose(f))ok=0;}
     if(!ok || !MoveFileExA(temp,path,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)) {
-        DeleteFileA(temp);MessageBoxW(b->hwnd,L"游戏进度已保存，但预览写入失败。",L"保存提示",MB_OK|MB_ICONWARNING);
+        DeleteFileA(temp);return 2;
     }
     return 1;
 }
-static void confirm(Browser *b) {
-    inspect(b,b->selected);Slot *s=&b->slots[b->selected];
-    if(!b->writing && s->state!=1){MessageBoxW(b->hwnd,s->state?L"存档异常，无法读取。":L"这是空存档。",L"读取存档",MB_OK);refresh(b);return;}
-    if(b->writing) {
-        wchar_t text[100];swprintf(text,100,L"是否覆盖存档 %02d？",b->selected+1);
-        if(s->state && MessageBoxW(b->hwnd,text,L"确认覆盖",MB_YESNO|MB_DEFBUTTON2|MB_ICONQUESTION)!=IDYES)return;
-        if(!commit_save(b)){MessageBoxW(b->hwnd,L"保存失败，原存档已保留。请检查磁盘空间和目录权限。",L"保存失败",MB_OK|MB_ICONERROR);return;}
-    }
-    last_slot=b->selected;b->result=b->selected;b->done=1;
+/* Game-native browser: the original font renderer and palette, on the
+ * existing VGA page. No OS dialogs, fonts, controls or secondary window. */
+static void game_text(Browser *b,unsigned x,unsigned y,const wchar_t *text,int selected) {
+    char encoded[96];int length=WideCharToMultiByte(936,0,text,-1,encoded,sizeof encoded,NULL,NULL);
+    if(!length)return;
+    JxFarPointer scratch={0x200,0x9d00};for(int i=0;i<length;i++)jx_far_set_byte(b->c,scratch,(uint16_t)i,(uint8_t)encoded[i]);
+    (void)JX_CALL(b->c,0x1f2a,0x06f2,selected?47:80,0,77);
+    (void)JX_CALL(b->c,0x1f2a,0x0728,x,y,scratch.offset,scratch.segment);
 }
-static void page_move(Browser *b,int delta) {
-    int page=(b->selected/10+delta+10)%10,row=b->selected%10;b->selected=page*10+row;if(b->selected>=SLOTS)b->selected=SLOTS-1;refresh(b);
+static unsigned screen_start(Browser *b){return (unsigned)b->window->video->start_high<<8;}
+static void put_pixel(Browser *b,unsigned x,unsigned y,uint8_t color) {
+    b->window->video->planes[x&3][(screen_start(b)+y*80+x/4)&65535]=color;
 }
-static LRESULT CALLBACK browser_proc(HWND hwnd,UINT msg,WPARAM w,LPARAM l) {
-    Browser *b=(Browser *)GetWindowLongPtrW(hwnd,GWLP_USERDATA);
-    if(msg==WM_NCCREATE){b=((CREATESTRUCTW *)l)->lpCreateParams;SetWindowLongPtrW(hwnd,GWLP_USERDATA,(LONG_PTR)b);b->hwnd=hwnd;}
-    if(!b)return DefWindowProcW(hwnd,msg,w,l);
-    if(msg==WM_CLOSE){b->done=1;return 0;}
-    if(msg==WM_COMMAND){int id=LOWORD(w);
-        if(id==10 && HIWORD(w)==LBN_SELCHANGE){int row=(int)SendMessageW(b->list,LB_GETCURSEL,0,0);if(row>=0){b->selected=b->selected/10*10+row;refresh(b);}return 0;}
-        if(id==10 && HIWORD(w)==LBN_DBLCLK){confirm(b);return 0;}
-        if(id==1)confirm(b);if(id==2)b->done=1;if(id==3)page_move(b,-1);if(id==4)page_move(b,1);return 0;
+static void backdrop(Browser *b,const uint8_t *pixels,int dim) {
+    for(unsigned y=0;y<200;y++)for(unsigned x=0;x<320;x++) {
+        unsigned color=pixels[y*320+x];put_pixel(b,x,y,dim?b->ds[0xb584+color]:(uint8_t)color);
     }
-    if(msg==WM_PAINT){PAINTSTRUCT ps;HDC dc=BeginPaint(hwnd,&ps);RECT r={470,35,790,235};FillRect(dc,&r,(HBRUSH)GetStockObject(BLACK_BRUSH));
-        if(b->image.magic==0x3153584a){BITMAPINFO info={0};info.bmiHeader.biSize=sizeof info.bmiHeader;info.bmiHeader.biWidth=160;info.bmiHeader.biHeight=-100;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;StretchDIBits(dc,470,35,320,200,0,0,160,100,b->image.pixels,&info,DIB_RGB_COLORS,SRCCOPY);}
-        else {SetTextColor(dc,RGB(220,220,220));SetBkMode(dc,TRANSPARENT);DrawTextW(dc,L"暂无预览",-1,&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE);}
-        EndPaint(hwnd,&ps);return 0;}
-    return DefWindowProcW(hwnd,msg,w,l);
 }
-int jx_native_save_browser(JxNativeWindow *window,uint8_t *ds,int writing) {
-    if(writing==2 || !window->save_scene_valid){
-        jx_native_window_present(window);unsigned width=window->mode && *window->mode==18?640:320,height=width==640?480:200;
-        for(unsigned y=0;y<100;y++)for(unsigned x=0;x<160;x++)window->save_scene[y*160+x]=window->pixels[(y*height/100)*width+x*width/160];
-        window->save_scene_valid=1;if(writing==2)return 0;
+static void border(Browser *b,unsigned x,unsigned y,unsigned width,unsigned height) {
+    for(unsigned i=0;i<width;i++){put_pixel(b,x+i,y,80);put_pixel(b,x+i,y+height-1,80);}
+    for(unsigned i=0;i<height;i++){put_pixel(b,x,y+i,80);put_pixel(b,x+width-1,y+i,80);}
+}
+static uint8_t nearest_color(Browser *b,uint32_t color,uint16_t *cache) {
+    unsigned r=(color>>16)&255,g=(color>>8)&255,blue=color&255,key=((r>>3)<<10)|((g>>3)<<5)|(blue>>3);
+    if(cache[key]!=0xffff)return (uint8_t)cache[key];
+    unsigned best=0,distance=~0u;
+    for(unsigned i=0;i<256;i++) {
+        int dr=(int)r-b->window->palette[i*3]*4,dg=(int)g-b->window->palette[i*3+1]*4,db=(int)blue-b->window->palette[i*3+2]*4;
+        unsigned d=(unsigned)(dr*dr+dg*dg+db*db);if(d<distance){distance=d;best=i;}
     }
-    Browser b={0};b.window=window;b.ds=ds;b.writing=writing;b.selected=last_slot;b.result=-1;
+    cache[key]=(uint16_t)best;return (uint8_t)best;
+}
+static void draw_browser(Browser *b,const uint8_t *background) {
+    backdrop(b,background,1);border(b,0,0,320,200);border(b,132,18,184,162);
+    wchar_t text[96];swprintf(text,96,L"%ls  %d/10",b->writing?L"存档":L"读档",b->selected/10+1);game_text(b,4,1,text,0);
+    int first=b->selected/10*10;
+    for(int i=first;i<SLOTS && i<first+10;i++) {
+        Slot *s=&b->slots[i];wchar_t place[40];scene_text(s->scene,place,40);
+        swprintf(text,96,L"%02d %ls",i+1,!s->state?L"空存档":s->state==2?L"异常":place);
+        game_text(b,4,(unsigned)(18+(i-first)*16),text,i==b->selected);
+    }
+    Slot *s=&b->slots[b->selected];
+    if(s->state==1)game_text(b,144,1,s->preview?L"保存时间":L"文件时间",0);
+    memset(&b->image,0,sizeof b->image);
+    if(s->preview) {
+        char path[160];path_for(path,sizeof path,b->selected,"preview");FILE *f=fopen(path,"rb");
+        if(f){if(fread(&b->image,1,sizeof b->image,f)!=sizeof b->image)b->image.magic=0;fclose(f);}
+    }
+    if(b->image.magic==0x3153584a && b->image.hash==s->hash) {
+        uint16_t cache[32768];memset(cache,255,sizeof cache);
+        for(unsigned y=0;y<100;y++)for(unsigned x=0;x<160;x++)put_pixel(b,144+x,24+y,nearest_color(b,b->image.pixels[y*160+x],cache));
+    } else game_text(b,152,64,L"暂无预览",0);
+    if(s->state==1) {
+        scene_text(s->scene,text,96);game_text(b,144,126,text,0);time_text(s->time,text,96);
+        text[10]=0;game_text(b,144,143,text,0);time_text(s->time,text,96);game_text(b,144,160,text+11,0);
+    } else game_text(b,144,143,s->state?L"存档异常":L"空存档",0);
+    game_text(b,4,182,L"左右翻页 回车/空格确认",0);jx_native_window_present(b->window);
+}
+static void notice(Browser *b,const wchar_t *text) {
+    (void)JX_CALL(b->c,0x1832,0x1884,132,124,184,55,0);game_text(b,136,128,text,0);
+    game_text(b,136,150,L"按键返回",0);jx_native_window_present(b->window);(void)JX_CALL0(b->c,0x1f2a,0x731a);
+}
+static int overwrite(Browser *b) {
+    const char *labels[]={"\xc8\xb7\xc8\xcf\xb8\xb2\xb8\xc7","\xc8\xa1\xcf\xfb"};
+    JxFarPointer text={0x300,0x9d00},table={0x340,0x9d00};
+    for(unsigned i=0;i<2;i++) {
+        for(unsigned k=0;k<=strlen(labels[i]);k++)jx_far_set_byte(b->c,text,(uint16_t)(16*i+k),(uint8_t)labels[i][k]);
+        uint16_t offset=(uint16_t)(text.offset+16*i);
+        jx_far_set_byte(b->c,table,(uint16_t)(4*i),(uint8_t)offset);jx_far_set_byte(b->c,table,(uint16_t)(4*i+1),(uint8_t)(offset>>8));
+        jx_far_set_byte(b->c,table,(uint16_t)(4*i+2),0);jx_far_set_byte(b->c,table,(uint16_t)(4*i+3),0x9d);
+    }
+    uint16_t selected=1;return jx_menu_select(b->c,144,40,2,table,(JxFarPointer){0x360,0x9d00},&selected)==0;
+}
+int jx_native_save_browser(JxNativeWindow *window,uint8_t *ds,int mode) {
+    (void)ds;if(mode!=2)return -2;
+    jx_native_window_present(window);unsigned width=window->mode && *window->mode==18?640:320,height=width==640?480:200;
+    for(unsigned y=0;y<100;y++)for(unsigned x=0;x<160;x++)window->save_scene[y*160+x]=window->pixels[(y*height/100)*width+x*width/160];
+    window->save_scene_valid=1;return 0;
+}
+int jx_native_game_save_browser(JxNativeWindow *window,JxEventContext *c,int writing) {
+    uint8_t *ds=jx_ds(c);
+    if(writing==2)return jx_native_save_browser(window,ds,2);
+    if(!window->save_scene_valid)(void)jx_native_save_browser(window,ds,2);
+    Browser b={0};b.window=window;b.ds=ds;b.c=c;b.selected=last_slot;b.writing=writing;b.result=-1;
+    uint8_t background[320*200];unsigned start=screen_start(&b);
+    for(unsigned y=0;y<200;y++)for(unsigned x=0;x<320;x++)background[y*320+x]=window->video->planes[x&3][(start+y*80+x/4)&65535];
+    unsigned draw_page=(unsigned)c->memory[0x44e]|((unsigned)c->memory[0x44f]<<8);
+    (void)JX_CALL(c,0x1832,0x1810,start/0x4000);(void)JX_CALL(c,0x1f2a,0x0718,176);
     for(int i=0;i<SLOTS;i++)inspect(&b,i);
-    HINSTANCE instance=GetModuleHandleW(NULL);WNDCLASSW cls={0};cls.lpfnWndProc=browser_proc;cls.hInstance=instance;cls.hCursor=LoadCursorW(NULL,IDC_ARROW);cls.hbrBackground=(HBRUSH)(COLOR_BTNFACE+1);cls.lpszClassName=L"JxSaveBrowser";
-    if(!RegisterClassW(&cls) && GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)return -1;
-    RECT parent;GetWindowRect((HWND)window->handle,&parent);HWND hwnd=CreateWindowExW(WS_EX_DLGMODALFRAME,cls.lpszClassName,L"存档",WS_CAPTION|WS_SYSMENU|WS_POPUP,parent.left+30,parent.top+50,840,460,(HWND)window->handle,NULL,instance,&b);if(!hwnd)return -1;
-    HFONT font=CreateFontW(-18,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,0,0,L"Microsoft YaHei");
-    b.list=CreateWindowW(L"LISTBOX",NULL,WS_CHILD|WS_VISIBLE|WS_BORDER|LBS_NOTIFY,20,25,425,310,hwnd,(HMENU)10,instance,NULL);SendMessageW(b.list,WM_SETFONT,(WPARAM)font,TRUE);SendMessageW(b.list,LB_SETITEMHEIGHT,0,28);
-    b.detail=CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,470,250,340,85,hwnd,NULL,instance,NULL);
-    const wchar_t *labels[]={L"确认",L"返回",L"上一页",L"下一页"};for(int i=0;i<4;i++){HWND child=CreateWindowW(L"BUTTON",labels[i],WS_CHILD|WS_VISIBLE|WS_TABSTOP,20+i*115,355,100,32,hwnd,(HMENU)(INT_PTR)(i+1),instance,NULL);SendMessageW(child,WM_SETFONT,(WPARAM)font,TRUE);}
-    HWND hint=CreateWindowW(L"STATIC",L"↑↓ 选择   ←→ 翻页   Enter 确认   Esc 返回",WS_CHILD|WS_VISIBLE,20,395,760,24,hwnd,NULL,instance,NULL);SendMessageW(hint,WM_SETFONT,(WPARAM)font,TRUE);SendMessageW(b.detail,WM_SETFONT,(WPARAM)font,TRUE);
-    refresh(&b);EnableWindow((HWND)window->handle,FALSE);ShowWindow(hwnd,SW_SHOW);SetFocus(b.list);
-    MSG message;int quit=0;
-    while(!b.done){int got=GetMessageW(&message,NULL,0,0);if(got<=0){quit=got==0;break;}
-        if(message.message==WM_KEYDOWN && (message.hwnd==hwnd || IsChild(hwnd,message.hwnd))){
-            switch(message.wParam){case VK_ESCAPE:b.done=1;continue;case VK_RETURN:confirm(&b);continue;case VK_LEFT:case VK_PRIOR:page_move(&b,-1);continue;case VK_RIGHT:case VK_NEXT:page_move(&b,1);continue;
-            case VK_UP:case VK_DOWN:{int first=b.selected/10*10,count=first==90?9:10; b.selected=first+(b.selected-first+(message.wParam==VK_UP?count-1:1))%count;refresh(&b);continue;}}
+    (void)JX_CALL0(c,0x1f2a,0xc24e);
+    while(!b.done) {
+        draw_browser(&b,background);JxFarPointer input={0x100,0x9d00};
+        for(;;) {
+            while((uint16_t)JX_CALL(c,0x1f2a,0xc1f2,input.offset,input.segment)!=0){}
+            uint16_t type=jx_far_word(c,input.segment,input.offset),key=jx_far_word(c,input.segment,(uint16_t)(input.offset+2));
+            if(type==8){jx_music_poll(c);continue;}
+            if(type==1 && key==1){b.done=1;break;}
+            if(type==1 && (key==0x48 || key==0x50)) {
+                int first=b.selected/10*10,count=first==90?9:10;b.selected=first+(b.selected-first+(key==0x48?count-1:1))%count;break;
+            }
+            if(type==1 && (key==0x4b || key==0x4d || key==0x49 || key==0x51)) {
+                int page=(b.selected/10+((key==0x4b || key==0x49)?9:1))%10;b.selected=page*10+b.selected%10;if(b.selected>=99)b.selected=98;break;
+            }
+            if(type!=0 || (key!=0x1c && key!=0x39))continue;
+            inspect(&b,b.selected);Slot *s=&b.slots[b.selected];
+            if(!writing && s->state!=1){notice(&b,s->state?L"存档异常":L"空存档");break;}
+            if(writing) {
+                if(s->state && !overwrite(&b))break;
+                int saved=commit_save(&b);if(!saved){notice(&b,L"保存失败");break;}
+                if(saved==2)notice(&b,L"预览保存失败");
+            }
+            last_slot=b.selected;b.result=b.selected;b.done=1;break;
         }
-        TranslateMessage(&message);DispatchMessageW(&message);
     }
-    DestroyWindow(hwnd);DeleteObject(font);EnableWindow((HWND)window->handle,TRUE);SetForegroundWindow((HWND)window->handle);jx_native_window_sync_ticks(window);if(quit)PostQuitMessage((int)message.wParam);return b.result;
+    backdrop(&b,background,0);(void)JX_CALL(c,0x1832,0x1810,draw_page/0x4000);
+    (void)JX_CALL(c,0x1f2a,0x06f2,80,0,77);(void)JX_CALL0(c,0x1f2a,0xc24e);jx_native_window_present(window);return b.result;
 }

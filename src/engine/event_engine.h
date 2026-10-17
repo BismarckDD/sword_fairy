@@ -1254,9 +1254,12 @@ uint16_t jx_battle_cache_animation(JxEventContext *,JxFarPointer,uint16_t,uint16
 void jx_battle_award_experience(JxEventContext *,JxFarPointer);
 void jx_battle_show_damage(JxEventContext *,uint16_t,uint16_t,JxFarPointer);
 uint16_t jx_action_menu(JxEventContext *,uint16_t,uint16_t,uint16_t,JxFarPointer,JxFarPointer);
+uint16_t jx_menu_select(JxEventContext *,uint16_t,uint16_t,uint16_t,JxFarPointer,JxFarPointer,uint16_t *);
 uint16_t jx_skill_menu(JxEventContext *,uint16_t,JxFarPointer);
 void jx_skill_menu_render(JxEventContext *,uint16_t,uint16_t,uint16_t,JxFarPointer);
 uint16_t jx_item_menu(JxEventContext *,JxFarPointer);
+typedef struct {char lines[7][32];unsigned count;} JxItemDescription;
+void jx_item_description(JxEventContext *,uint16_t,JxItemDescription *);
 void jx_item_menu_render(JxEventContext *,uint16_t,uint16_t,uint16_t,JxFarPointer);
 void jx_actor_menu_show(JxEventContext *,uint16_t,JxFarPointer);
 enum {

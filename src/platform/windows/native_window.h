@@ -1,6 +1,7 @@
 #ifndef JX_NATIVE_WINDOW_H
 #define JX_NATIVE_WINDOW_H
 #include "video_model.h"
+#include "event_engine.h"
 #include "legacy_vga_model.h"
 typedef struct {
     void *handle,*opaque;
@@ -30,4 +31,5 @@ int jx_native_window_post_scan(JxNativeWindow *,uint8_t);
 int jx_native_window_post_focus_loss(JxNativeWindow *);
 int jx_native_window_post_close(JxNativeWindow *);
 int jx_native_save_browser(JxNativeWindow *,uint8_t *,int);
+int jx_native_game_save_browser(JxNativeWindow *,JxEventContext *,int);
 #endif

@@ -58,7 +58,7 @@ uint16_t jx_load_game_menu(JxEventContext *c,JxFarPointer work) {
         }
         type=jx_far_word(c,work.segment,work.offset);
         key=jx_far_word(c,work.segment,(uint16_t)(work.offset+2));
-        if(type!=0 || key!=0x1c) continue;
+        if(type!=0 || (key!=0x1c && key!=0x39)) continue;
         load_background(c,0x1c6c,load_buffer(c,0));
 selected:
         (void)JX_CALL0(c,0x1f2a,0xc24e);
