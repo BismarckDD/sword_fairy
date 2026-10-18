@@ -43,6 +43,24 @@ static void packed_references(void){
     }
     memset(&video,0,sizeof video);puts("PASS: standalone superres addon, bundled references and malformed offset rejection");
 }
+static void cropped_priority(void){
+    _mkdir("build/hd-crop-fixture");fixture("build/hd-crop-fixture",0);
+    FILE *f=fopen("build/hd-crop-fixture/tall.idx","wb");assert(f);assert(fwrite(palette,1,768,f)==768);
+    const uint8_t indices[]={1,2,255,1,3,4,5,6};assert(fwrite(indices,1,8,f)==8);fclose(f);
+    f=fopen("build/hd-crop-fixture/tall.bmp","wb");assert(f);
+    fputs("BM",f);put32(f,54+8*16*4);put32(f,0);put32(f,54);put32(f,40);put32(f,8);put32(f,(uint32_t)-16);
+    put16(f,1);put16(f,32);put32(f,0);put32(f,8*16*4);for(unsigned i=0;i<4;i++)put32(f,0);
+    for(unsigned i=0;i<128;i++)put32(f,0x551122);fclose(f);
+    f=fopen("build/hd-crop-fixture/manifest.tsv","wb");assert(f);
+    fputs("tall\t2\t4\ttall.idx\ttall.bmp\ttruecolor\nexact\t2\t2\tref.idx\timage.bmp\ttruecolor\n",f);fclose(f);
+    JxHd *h=jx_hd_open("build/hd-crop-fixture");assert(h && jx_hd_asset_count(h)==2);
+    JxEventContext c={memory,0,NULL,NULL,NULL,NULL};memcpy(memory+0x90000,indices,8);
+    memset(&video,0,sizeof video);memory[0x44e]=memory[0x44f]=0;
+    for(unsigned p=0;p<4;p++)pixel(20+p%2,20+p/2,indices[p]);
+    uint16_t a[]={20,20,2,2,0,0x9000};jx_hd_blit(h,&c,&video,a,-1);
+    assert(jx_hd_render(h,&video,palette)[80*1280+80]==0x551122);jx_hd_close(h);memset(&video,0,sizeof video);
+    puts("PASS: taller cropped asset retains manifest priority over an exact-size match");
+}
 static void planar_tiles(void){
     _mkdir("build/hd-planar-fixture");
     FILE *f=fopen("build/hd-planar-fixture/manifest.tsv","wb");assert(f);
@@ -265,6 +283,7 @@ int main(void){
     _mkdir("build");_mkdir("build/hd-fixture");_mkdir("build/hd-bad-fixture");
     fixture("build/hd-fixture",0);fixture("build/hd-bad-fixture",1);
     packed_references();
+    cropped_priority();
     planar_tiles();
     layered_tiles();
     assert(!jx_hd_open("build/no-such-hd-pack"));

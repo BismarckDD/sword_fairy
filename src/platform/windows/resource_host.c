@@ -973,8 +973,12 @@ static uint32_t native_hd_dispatch(void *p,uint16_t s,uint16_t o,const uint16_t 
     }
     return result;
 }
-static uint32_t native_input_dispatch(void *p,uint16_t s,uint16_t o,const uint16_t *a,size_t n) {
+static uint32_t native_input_dispatch_body(void *p,uint16_t s,uint16_t o,const uint16_t *a,size_t n) {
     Host *h=p;
+    if(h->window.battle_context && s==0x1f2a) {
+        if(o==0x80fa && n==5)h->window.battle_visible=1;
+        if(o==0x5ae8 && n==0)h->window.battle_visible=0;
+    }
     if(h->ui_events && s==0x1f2a && o==0xc1f2 && n==2){JxInputEvent event;ui_test_input(h,&event);uint32_t at=((uint32_t)a[1]*16+a[0])&0xfffff;h->memory[at]=(uint8_t)event.type;h->memory[at+1]=0;h->memory[at+2]=(uint8_t)event.value1;h->memory[at+3]=0;memset(h->memory+at+4,0,4);return 0;}
     if(h->test_supply_stage && s==0x1f2a && o==0x4934 && n==3)test_max_supplies(h,a[0]);
     int adaptive_tactics=h->adaptive_walkthrough && h->walkthrough_phase>=92;
@@ -2557,6 +2561,14 @@ adaptive_route_reloaded:;
     }
     return h->input_fallback(h->input_fallback_opaque,s,o,a,n);
 }
+static uint32_t native_input_dispatch(void *p,uint16_t s,uint16_t o,const uint16_t *a,size_t n) {
+    Host *h=p;
+    int battle=s==0x1f2a && o==0x4934 && n==3;
+    if(battle)jx_native_battle_begin(&h->window,&h->c,a[0],a[1],a[2]);
+    uint32_t result=native_input_dispatch_body(p,s,o,a,n);
+    if(battle)jx_native_battle_end(&h->window);
+    return result;
+}
 static uint32_t cd_packet_dword(Host *h,JxFarPointer p,unsigned off) {
     uint32_t v=0;for(unsigned i=0;i<4;i++)v|=(uint32_t)jx_far_byte(&h->c,p,(uint16_t)(off+i))<<(8*i);return v;
 }
@@ -3534,7 +3546,7 @@ world_ready:
     if(battle_probe){
         export_state(h,"main_decompiled/build/native_battle_initial.bin");
         h->story_probe=1;h->battle_input=1;h->story_poll_steps=0;
-        uint16_t result=jx_battle_run(&h->c,1,0,0xffff,(JxFarPointer){0,0xb000});
+        uint16_t result=(uint16_t)JX_CALL(&h->c,0x1f2a,0x4934,1,0,0xffff);
         h->story_probe=0;h->battle_input=0;export_state(h,"main_decompiled/build/native_battle_final.bin");
         if(h->window.hd) {
             if(!jx_hd_export_bmp(h->window.hd,h->video,h->palette,"main_decompiled/analysis/native_hd_battle_preview.bmp"))fail(h,"cannot export HD battle image");

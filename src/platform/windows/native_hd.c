@@ -15,12 +15,12 @@ typedef struct {
     int failed;
     unsigned used;
     int truecolor,dynamic_kind;
-    unsigned next_hash,next_width;
+    unsigned next_hash,next_dimension;
 } Asset;
 typedef struct {unsigned address,width,height;uint8_t *indices;uint32_t *tags;} Capture;
 struct JxHd {
     Asset assets[HD_ASSETS];unsigned count,hits,tile_hits,animation_hits,clock,capture_next,cache_bytes;
-    unsigned buckets[HD_BUCKETS],width_heads[321],max_height[321];
+    unsigned buckets[HD_BUCKETS],dimension_heads[321][201],max_height[321];
     unsigned render_heads[HD_ASSETS],render_next[64000],render_ids[64000];
     uint32_t tile_tags[256];uint8_t tile_indices[256];
     unsigned tile_address;int tile_valid;
@@ -54,7 +54,9 @@ static unsigned find_asset(JxHd *h,const uint8_t *pixels,unsigned w,unsigned hei
         if(a->width==w && a->height==height && !a->failed && a->hash==hash && !memcmp(a->indices,pixels,w*height))
             if(!result || link<result)result=link;
     }
-    if(height<h->max_height[w])for(unsigned link=h->width_heads[w];link;link=h->assets[link-1].next_width){
+    /* Crop compatibility visits only genuinely taller size groups. A shared
+     * width must not put every 16x16 world tile back on a linear scan. */
+    for(unsigned taller=height+1;taller<=h->max_height[w];taller++)for(unsigned link=h->dimension_heads[w][taller];link;link=h->assets[link-1].next_dimension){
         Asset *a=&h->assets[link-1];
         if(a->height>height && !a->failed && (!result || link<result) && hash_bytes(a->indices,w*height)==hash && !memcmp(a->indices,pixels,w*height))result=link;
     }
@@ -111,7 +113,7 @@ JxHd *jx_hd_open(const char *directory){
         a->width=w;a->height=hh;a->truecolor=truecolor;a->hash=hash_bytes(a->indices,w*hh);strcpy(a->image,image);
         a->dynamic_kind=!strncmp(name,"TILE_",5)?1:!strncmp(name,"BATTLE_",7)?2:0;
         unsigned bucket=asset_bucket(a->hash,w,hh);a->next_hash=h->buckets[bucket];h->buckets[bucket]=h->count+1;
-        a->next_width=h->width_heads[w];h->width_heads[w]=h->count+1;if(hh>h->max_height[w])h->max_height[w]=hh;
+        a->next_dimension=h->dimension_heads[w][hh];h->dimension_heads[w][hh]=h->count+1;if(hh>h->max_height[w])h->max_height[w]=hh;
         h->count++;
     }
     if(packed)fclose(packed);fclose(f);

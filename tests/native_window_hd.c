@@ -2,12 +2,15 @@
 #include <windows.h>
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 #include "native_window.h"
 static JxNativeWindow window;
 static JxVideoModel video;
 static JxLegacyVgaModel legacy;
 static uint8_t palette[768];
 static uint16_t mode;
+static uint8_t memory[1<<20];
+static JxEventContext context;
 static void tick(void *opaque){(void)opaque;}
 static void scan(void *opaque,uint8_t value){(void)opaque;(void)value;}
 int main(void){
@@ -44,6 +47,26 @@ int main(void){
     assert(jx_native_window_post_scan(&window,0x42));assert(jx_native_window_post_scan(&window,0xc2));
     assert(jx_native_window_pump(&window));assert(!window.hd_disabled);
     assert(SendMessageW((HWND)window.handle,WM_ERASEBKGND,0,0)==1);
+    context.memory=memory;context.data_segment=0;
+    jx_set_word(&context,0x499e + 30+14,500);
+    jx_set_word(&context,0x6614,400);
+    jx_set_word(&context,0xd04e + 16,100);jx_set_word(&context,0xd04e + 20,200);
+    jx_set_word(&context,0xd04e + 68+16,70);jx_set_word(&context,0xd04e + 68+20,90);
+    memcpy(memory+0x6606,"Enemy",6);memcpy(memory+0xd04e,"Hero",5);memcpy(memory+0xd04e + 68,"Partner",8);
+    jx_native_battle_begin(&window,&context,1,0,0xffff);
+    uint16_t hp,max;assert(jx_native_battle_hp(&window,0,&hp,&max) && hp==400 && max==500);
+    assert(jx_native_battle_hp(&window,1,&hp,&max) && hp==100 && max==200);
+    assert(!jx_native_battle_hp(&window,2,&hp,&max));
+    jx_set_word(&context,0x6614,0xfffa);
+    assert(jx_native_battle_hp(&window,0,&hp,&max) && hp==0 && max==500);
+    jx_set_word(&context,0xd04e + 16,175);jx_set_word(&context,0xd04e + 20,220);
+    assert(jx_native_battle_hp(&window,1,&hp,&max) && hp==175 && max==220);
+    jx_native_battle_begin(&window,&context,1,0,1);
+    assert(jx_native_battle_hp(&window,2,&hp,&max) && hp==70 && max==90);
+    window.battle_visible=1;jx_native_window_present(&window);
+    assert(GetPixel((HDC)window.back_dc,30,10)==RGB(18,23,30));
+    assert(jx_native_window_post_scan(&window,0x42));assert(jx_native_window_pump(&window));
+    jx_native_window_present(&window);assert(GetPixel((HDC)window.back_dc,30,10)==RGB(18,23,30));
     DWORD gdi_before=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
     for(unsigned i=0;i<40;i++){
         RECT target={0,0,(i%2)?1000:800,600};assert(AdjustWindowRect(&target,WS_OVERLAPPEDWINDOW,FALSE));
@@ -53,6 +76,10 @@ int main(void){
         assert(GetPixel(dc,client.right/2,client.bottom/2)==RGB(252,252,252));ReleaseDC((HWND)window.handle,dc);
         assert(window.back_width==client.right && window.back_height==client.bottom);
     }
+    assert(jx_word(&context,0x6614)==0xfffa && jx_word(&context,0xd04e + 16)==175);
+    jx_native_battle_end(&window);assert(!jx_native_battle_hp(&window,0,&hp,&max));
+    assert(GetPixel((HDC)window.back_dc,30,10)==RGB(252,252,252));
+    puts("PASS: live single/dual battle HP, maximum, death clamp, F8, resize and cleanup; game memory unchanged");
     assert(window.buffered_paints==window.paints);
     assert(GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS)<=gdi_before+2);
     jx_native_window_close(&window);jx_hd_close(window.hd);window.hd=NULL;

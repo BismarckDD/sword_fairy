@@ -891,7 +891,7 @@
     },
     {
       "path": "src/platform/windows/game_launcher.c",
-      "sha256": "4f38c45744b89c2100e37f77f3b1acd08ef391cdeb311e87cec9ee728d9a539c"
+      "sha256": "18c2143291be13dce9c4a4185ff3c916ad403295c2cfd117f3f2d17c38557040"
     },
     {
       "path": "src/platform/windows/native_audio.c",
@@ -915,15 +915,15 @@
     },
     {
       "path": "src/platform/windows/native_window.c",
-      "sha256": "f07cd7d908a14116acb0bf76b3f3b6248a2183260823c5c3f9262cfc9bf16dac"
+      "sha256": "91bafe19f97c3a68b816dc64fb9278c75b833b16bb49ce30825d3c2600d55359"
     },
     {
       "path": "src/platform/windows/native_window.h",
-      "sha256": "7395b330741e49e081470fe7e72c58ef7919c2c7855ae2437c8909e72121cdb7"
+      "sha256": "30cbce0c7152da8a3dcadbbf07ad172bdd36e8fd94e8b5dfa55141d16612fb84"
     },
     {
       "path": "src/platform/windows/resource_host.c",
-      "sha256": "ff6e8cb4bbaa2724bb46401aa7914230ee243165f02b111f55a93dcede117079"
+      "sha256": "45216067c4c334f1644cb63851c9dd2053c736ea8deb766a437c19a135f85b60"
     },
     {
       "path": "tests/item_description.c",
@@ -1347,15 +1347,15 @@
     },
     {
       "path": "src/platform/windows/native_hd.c",
-      "sha256": "28bba54922db68e32635cf3839ec60bfd75b2fe6ac66035fa13e85cb5759b085"
+      "sha256": "ebe0d64bb43484a3f792594f77637c5024970389472e7cfc5a83e24c6539e374"
     },
     {
       "path": "src/platform/windows/native_hd.h",
-      "sha256": "132ffefa9610857b1d4e740bd628adc2a2e57fb593dbcc256aa1a588aa5c9684"
+      "sha256": "9c18d4659bb61ab846ec4b0b3065013e708c6fecdcc43f60fd2e0818de481aac"
     },
     {
       "path": "tests/native_hd.c",
-      "sha256": "68b412e4f1d84512c65c959331b0fe093d867dbdf567104c2ab678ff8694c5e3"
+      "sha256": "a02fe0cd420e1cc7a3d68452d0e129c6fdb0e60089f79378c74a46d009be098f"
     },
     {
       "path": "tools/build-hd-pack.ps1",
@@ -1404,6 +1404,14 @@
     {
       "path": "tools/check-redraw-sheets.ps1",
       "sha256": "6937bbd2639a1b317879b46654c9e8b61c0b7ff343015c6eb37300773ff826e5"
+    },
+    {
+      "path": "tests/native_hd_perf.c",
+      "sha256": "3cc46897736a89796269948b72db4c53891f13c6cbf1070ec21582a4926983a1"
+    },
+    {
+      "path": "tools/remaster-assets.py",
+      "sha256": "c71dab389a8b540061df630bd6b6d4236bb0e9240fdabc56bea5cee6b02e934a"
     }
   ]
 }

@@ -3,7 +3,58 @@
 #define _UNICODE
 #include <windows.h>
 #include <mmsystem.h>
+#include <wchar.h>
 #include "native_window.h"
+/* Presentation-only battle status: never writes the original game memory. */
+void jx_native_battle_begin(JxNativeWindow *d,JxEventContext *c,uint16_t encounter,uint16_t first,uint16_t second) {
+    d->battle_context=c;d->battle_actors[0]=first;d->battle_actors[1]=second;
+    d->battle_enemy_max=jx_word(c,(uint16_t)(0x499e + encounter*30+14));d->battle_visible=0;
+}
+void jx_native_battle_end(JxNativeWindow *d) {
+    d->battle_visible=0;d->battle_context=NULL;jx_native_window_present(d);
+}
+int jx_native_battle_hp(JxNativeWindow *d,unsigned slot,uint16_t *current,uint16_t *maximum) {
+    JxEventContext *c=d->battle_context;if(!c || slot>2)return 0;
+    uint16_t value;
+    if(!slot){value=jx_word(c,0x6614);*maximum=d->battle_enemy_max;}
+    else {
+        uint16_t actor=d->battle_actors[slot-1];
+        if(actor>=16 || (slot==2 && actor==d->battle_actors[0]))return 0;
+        uint16_t base=(uint16_t)(0xd04e + actor*68);
+        value=jx_word(c,(uint16_t)(base+16));*maximum=jx_word(c,(uint16_t)(base+20));
+    }
+    *current=jx_signed_word(value)>0?value:0;return 1;
+}
+static void paint_battle_status(JxNativeWindow *d,HDC dc,int left,int top,int width,int height) {
+    if(!d->battle_visible || !d->battle_context || width<=0 || height<=0)return;
+    int saved=SaveDC(dc);if(!saved)return;
+    IntersectClipRect(dc,left,top,left+width,top+height);
+    int font_height=height*21/800;if(font_height<12)font_height=12;
+    HFONT font=CreateFontW(-font_height,0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
+        OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Microsoft YaHei");
+    if(font)SelectObject(dc,font);
+    SetBkMode(dc,TRANSPARENT);
+    int partner=d->battle_actors[1]<16 && d->battle_actors[1]!=d->battle_actors[0];
+    for(unsigned slot=0;slot<3;slot++) {
+        uint16_t hp,max;if(!jx_native_battle_hp(d,slot,&hp,&max))continue;
+        int x=left+(slot==0?12:slot==1 && partner?438:854)*width/1280;
+        RECT panel={x,top+8*height/800,x+400*width/1280,top+78*height/800};
+        SetDCBrushColor(dc,RGB(18,23,30));FillRect(dc,&panel,(HBRUSH)GetStockObject(DC_BRUSH));
+        SetDCBrushColor(dc,slot?RGB(94,180,136):RGB(221,112,98));FrameRect(dc,&panel,(HBRUSH)GetStockObject(DC_BRUSH));
+        uint16_t base=slot?(uint16_t)(0xd04e + d->battle_actors[slot-1]*68):0x6606;
+        char raw[12];unsigned count=0;const uint8_t *ds=jx_ds(d->battle_context);
+        while(count<sizeof raw && ds[base+count]){raw[count]=(char)ds[base+count];count++;}
+        wchar_t name[16]={0},line[64];MultiByteToWideChar(936,0,raw,(int)count,name,15);
+        RECT text=panel;text.left+=10*width/1280;text.top+=3*height/800;
+        SetTextColor(dc,slot?RGB(151,232,185):RGB(255,170,151));
+        swprintf(line,64,L"%ls  %ls",slot?L"我方":L"敌方",name);
+        DrawTextW(dc,line,-1,&text,DT_SINGLELINE|DT_TOP|DT_NOPREFIX|DT_END_ELLIPSIS);
+        text.top+=30*height/800;SetTextColor(dc,RGB(255,245,220));
+        swprintf(line,64,L"生命  %u / %u",(unsigned)hp,(unsigned)max);
+        DrawTextW(dc,line,-1,&text,DT_SINGLELINE|DT_TOP|DT_NOPREFIX|DT_END_ELLIPSIS);
+    }
+    RestoreDC(dc,saved);if(font)DeleteObject(font);
+}
 static int prepare_backbuffer(JxNativeWindow *d,HDC dc,int width,int height) {
     if(width<=0 || height<=0)return 0;
     if(!d->back_dc)d->back_dc=CreateCompatibleDC(dc);
@@ -91,6 +142,7 @@ static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
         }
         FillRect(back,&size,(HBRUSH)GetStockObject(BLACK_BRUSH));
         if(tw>0 && th>0)StretchDIBits(back,left,top,tw,th,0,0,(int)width,(int)height,pixels,&info,DIB_RGB_COLORS,SRCCOPY);
+        if(!d->mode || *d->mode!=18)paint_battle_status(d,back,left,top,tw,th);
         if(BitBlt(dc,0,0,size.right,size.bottom,back,0,0,SRCCOPY))d->buffered_paints++;
         EndPaint(hwnd,&paint);return 0;
     }

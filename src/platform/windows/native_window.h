@@ -26,7 +26,13 @@ typedef struct {
     void *back_dc,*back_bitmap,*back_original;
     int back_width,back_height;
     unsigned buffered_paints;
+    JxEventContext *battle_context;
+    uint16_t battle_actors[2],battle_enemy_max;
+    int battle_visible;
 } JxNativeWindow;
+void jx_native_battle_begin(JxNativeWindow *,JxEventContext *,uint16_t,uint16_t,uint16_t);
+void jx_native_battle_end(JxNativeWindow *);
+int jx_native_battle_hp(JxNativeWindow *,unsigned,uint16_t *,uint16_t *);
 int jx_native_window_open(JxNativeWindow *);
 int jx_native_window_pump(JxNativeWindow *);
 void jx_native_window_sync_ticks(JxNativeWindow *);
