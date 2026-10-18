@@ -46,6 +46,8 @@
 
 ## 目录
 
+可选的 1280×800 四倍素材显示与生成方法见 [四倍素材说明](docs/HD_REMASTER.md)。生成的高清图片独立保存在本地 `runtime/game/hd/`，不随源码分发。
+
 ```text
 src/engine/             还原逻辑、桥接接口与早期研究代码
 src/platform/windows/  Win32 窗口、音频、光盘后端、资源宿主和启动器

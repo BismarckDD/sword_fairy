@@ -4,6 +4,25 @@
 #include <windows.h>
 #include <mmsystem.h>
 #include "native_window.h"
+static int prepare_backbuffer(JxNativeWindow *d,HDC dc,int width,int height) {
+    if(width<=0 || height<=0)return 0;
+    if(!d->back_dc)d->back_dc=CreateCompatibleDC(dc);
+    if(!d->back_dc)return 0;
+    if(d->back_bitmap && d->back_width==width && d->back_height==height)return 1;
+    HBITMAP bitmap=CreateCompatibleBitmap(dc,width,height);if(!bitmap)return 0;
+    HGDIOBJ previous=SelectObject((HDC)d->back_dc,bitmap);
+    if(!previous || previous==HGDI_ERROR){DeleteObject(bitmap);return 0;}
+    if(d->back_bitmap)DeleteObject((HBITMAP)d->back_bitmap);else d->back_original=previous;
+    d->back_bitmap=bitmap;d->back_width=width;d->back_height=height;return 1;
+}
+static void release_backbuffer(JxNativeWindow *d) {
+    if(d->back_dc){
+        if(d->back_original)SelectObject((HDC)d->back_dc,(HGDIOBJ)d->back_original);
+        if(d->back_bitmap)DeleteObject((HBITMAP)d->back_bitmap);
+        DeleteDC((HDC)d->back_dc);
+    }
+    d->back_dc=d->back_bitmap=d->back_original=NULL;d->back_width=d->back_height=0;
+}
 static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
     JxNativeWindow *d=(JxNativeWindow *)GetWindowLongPtrW(hwnd,GWLP_USERDATA);
     if(message==WM_NCCREATE) {
@@ -12,8 +31,23 @@ static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
     }
     if(!d)return DefWindowProcW(hwnd,message,w,l);
     switch(message) {
+    case WM_ERASEBKGND:return 1; /* The complete offscreen frame owns the background. */
+    case WM_GETMINMAXINFO: {
+        if(!d->hd)break;
+        MINMAXINFO *limits=(MINMAXINFO *)l;
+        RECT target={0,0,1280,800};AdjustWindowRect(&target,WS_OVERLAPPEDWINDOW,FALSE);
+        if(limits->ptMaxTrackSize.x<target.right-target.left)limits->ptMaxTrackSize.x=target.right-target.left;
+        if(limits->ptMaxTrackSize.y<target.bottom-target.top)limits->ptMaxTrackSize.y=target.bottom-target.top;
+        return 0;
+    }
     case WM_KEYDOWN:case WM_SYSKEYDOWN:case WM_KEYUP:case WM_SYSKEYUP: {
         uint8_t scan=(uint8_t)((l>>16)&0x7f);
+        if(d->hd && scan==0x42) {
+            if((message==WM_KEYDOWN || message==WM_SYSKEYDOWN) && !(l&((LPARAM)1<<30))) {
+                d->hd_disabled=!d->hd_disabled;InvalidateRect(hwnd,NULL,FALSE);
+            }
+            return 0;
+        }
         /* One confirmation per press; ignore OS autorepeat for action keys. */
         if((message==WM_KEYDOWN || message==WM_SYSKEYDOWN) && (l&((LPARAM)1<<30)) && (scan==0x1c || scan==0x39 || scan==1))return 0;
         d->pressed[scan]=(uint8_t)(message==WM_KEYDOWN || message==WM_SYSKEYDOWN);
@@ -29,6 +63,8 @@ static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
     case WM_PAINT: {
         d->paints++;
         PAINTSTRUCT paint;HDC dc=BeginPaint(hwnd,&paint);RECT size;GetClientRect(hwnd,&size);
+        if(!prepare_backbuffer(d,dc,size.right,size.bottom)){EndPaint(hwnd,&paint);return 0;}
+        HDC back=(HDC)d->back_dc;
         unsigned start=(unsigned)d->video->start_high<<8;
         unsigned width=d->mode && *d->mode==18?640:320,height=width==640?480:200;
         if(width==640)++d->planar_paints;
@@ -40,13 +76,28 @@ static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
         BITMAPINFO info={0};info.bmiHeader.biSize=sizeof info.bmiHeader;
         info.bmiHeader.biWidth=(LONG)width;info.bmiHeader.biHeight=-(LONG)height;
         info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
-        SetStretchBltMode(dc,COLORONCOLOR);
-        StretchDIBits(dc,0,0,size.right,size.bottom,0,0,(int)width,(int)height,d->pixels,&info,DIB_RGB_COLORS,SRCCOPY);
+        SetStretchBltMode(back,COLORONCOLOR);
+        const uint32_t *pixels=d->pixels;
+        if(width==320 && d->hd && !d->hd_disabled && !d->hd_suspended) {
+            pixels=jx_hd_render(d->hd,d->video,d->palette);width=1280;height=800;
+            info.bmiHeader.biWidth=(LONG)width;info.bmiHeader.biHeight=-(LONG)height;
+        }
+        int tw=size.right,th=size.bottom,left=0,top=0;
+        if(d->hd) {
+            int aspect_width=width==640?4:8,aspect_height=width==640?3:5;
+            if((int64_t)tw*aspect_height>(int64_t)th*aspect_width)tw=th*aspect_width/aspect_height;
+            else th=tw*aspect_height/aspect_width;
+            left=(size.right-tw)/2;top=(size.bottom-th)/2;
+        }
+        FillRect(back,&size,(HBRUSH)GetStockObject(BLACK_BRUSH));
+        if(tw>0 && th>0)StretchDIBits(back,left,top,tw,th,0,0,(int)width,(int)height,pixels,&info,DIB_RGB_COLORS,SRCCOPY);
+        if(BitBlt(dc,0,0,size.right,size.bottom,back,0,0,SRCCOPY))d->buffered_paints++;
         EndPaint(hwnd,&paint);return 0;
     }
     case WM_CLOSE:jx_native_window_close(d);return 0;
     default:return DefWindowProcW(hwnd,message,w,l);
     }
+    return DefWindowProcW(hwnd,message,w,l);
 }
 int jx_native_window_open(JxNativeWindow *d) {
     HINSTANCE instance=GetModuleHandleW(NULL);
@@ -54,10 +105,12 @@ int jx_native_window_open(JxNativeWindow *d) {
     cls.hCursor=LoadCursorW(NULL,IDC_ARROW);cls.lpszClassName=L"JxNativeEngineWindow";
     if(!RegisterClassW(&cls) && GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)return 0;
     RECT rectangle={0,0,960,600};AdjustWindowRect(&rectangle,WS_OVERLAPPEDWINDOW,FALSE);
+    if(d->hd){rectangle=(RECT){0,0,1280,800};AdjustWindowRect(&rectangle,WS_OVERLAPPEDWINDOW,FALSE);}
     HWND hwnd=CreateWindowExW(0,cls.lpszClassName,L"剑侠情缘 · 原生引擎",WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,CW_USEDEFAULT,rectangle.right-rectangle.left,rectangle.bottom-rectangle.top,
         NULL,NULL,instance,d);
     if(!hwnd)return 0;
+    if(d->hd)SetWindowPos(hwnd,NULL,0,0,rectangle.right-rectangle.left,rectangle.bottom-rectangle.top,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
     d->closed=0;d->ticks=0;d->retrace_frame=0;d->tick_origin=GetTickCount64();
     LARGE_INTEGER frequency,counter;
     QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&counter);
@@ -100,6 +153,7 @@ int jx_native_window_wait_retrace(JxNativeWindow *d) {
 }
 void jx_native_window_close(JxNativeWindow *d) {
     if(d->handle)DestroyWindow((HWND)d->handle);d->handle=NULL;d->closed=1;
+    release_backbuffer(d);
     if(d->timer_resolution){timeEndPeriod(1);d->timer_resolution=0;}
 }
 /* Bounded verification uses the same Win32 message path as keyboard input. */

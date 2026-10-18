@@ -3,6 +3,7 @@
 #include "video_model.h"
 #include "event_engine.h"
 #include "legacy_vga_model.h"
+#include "native_hd.h"
 typedef struct {
     void *handle,*opaque;
     JxVideoModel *video;
@@ -20,6 +21,11 @@ typedef struct {
     uint8_t pressed[128];
     uint32_t save_scene[160*100];
     int save_scene_valid;
+    JxHd *hd;
+    int hd_disabled,hd_suspended;
+    void *back_dc,*back_bitmap,*back_original;
+    int back_width,back_height;
+    unsigned buffered_paints;
 } JxNativeWindow;
 int jx_native_window_open(JxNativeWindow *);
 int jx_native_window_pump(JxNativeWindow *);

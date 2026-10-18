@@ -22,7 +22,16 @@ static int game_root(wchar_t *root,size_t capacity,wchar_t *engine,size_t engine
         int b=swprintf(engine,engine_capacity,L"%ls\\main_decompiled\\build\\jx_native.exe",root);
         int c=swprintf(main_image,4096,L"%ls\\MAIN.EXE",root);
         if(a<0 || b<0 || c<0)return 0;
-        if(file_exists(snapshot) && file_exists(engine) && file_exists(main_image))return 1;
+        if(file_exists(snapshot) && file_exists(engine) && file_exists(main_image)){
+            wchar_t hd_engine[4096],hd_manifest[4096];
+            int d=swprintf(hd_engine,4096,L"%ls\\main_decompiled\\build\\jx_native_hd.exe",root);
+            int e=swprintf(hd_manifest,4096,L"%ls\\hd\\superres\\manifest.tsv",root);
+            if(d>=0 && e>=0 && file_exists(hd_engine) && file_exists(hd_manifest)){
+                if(wcslen(hd_engine)>=engine_capacity)return 0;
+                wcscpy(engine,hd_engine);
+            }
+            return 1;
+        }
         slash=wcsrchr(root,L'\\');if(!slash)return 0;*slash=0;
     }
     return 0;

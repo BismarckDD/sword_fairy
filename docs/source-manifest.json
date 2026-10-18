@@ -1,5 +1,5 @@
 {
-  "scope": "Current source based on the verified local reconstruction, including native presentation timing fixes, the 99-slot save browser and game-native menu hierarchy; no original game resources or binaries included.",
+  "scope": "Current source based on the verified local reconstruction, including native timing, 99-slot saves, game-native menus and optional 1280x800 four-times asset presentation; no original game resources or generated assets included.",
   "files": [
     {
       "path": "src/engine/actor.c",
@@ -911,19 +911,19 @@
     },
     {
       "path": "src/platform/windows/native_saves.c",
-      "sha256": "f4d7f3a5121f527c6f73c57e13aae16a1b0bf41a689957bd775c80368f7132f8"
+      "sha256": "7696114bd09482d6f3656debe6f3c02aee8590ac9f8316a2f8368bf5bd51eb3c"
     },
     {
       "path": "src/platform/windows/native_window.c",
-      "sha256": "ecb16ba7b10ddef9bc168c2df5d0a10c8f9025f2e19ccc58246a36e9f896e97a"
+      "sha256": "f07cd7d908a14116acb0bf76b3f3b6248a2183260823c5c3f9262cfc9bf16dac"
     },
     {
       "path": "src/platform/windows/native_window.h",
-      "sha256": "92b486714550212d9144126649f355be03a1a862e1ffad89d19cfed90921c3f5"
+      "sha256": "7395b330741e49e081470fe7e72c58ef7919c2c7855ae2437c8909e72121cdb7"
     },
     {
       "path": "src/platform/windows/resource_host.c",
-      "sha256": "465160081aa1a639f4c4964e34a32605a075a5b664b9a8816a410692cb810f25"
+      "sha256": "ff6e8cb4bbaa2724bb46401aa7914230ee243165f02b111f55a93dcede117079"
     },
     {
       "path": "tests/item_description.c",
@@ -1340,6 +1340,70 @@
     {
       "path": "tools/extract_memory.py",
       "sha256": "df9cf6d7a574bb55e1bdf9e0ac1667f5315778264fb9d6a1ab0c3edc13661bec"
+    },
+    {
+      "path": "scripts/test-hd.ps1",
+      "sha256": "ee18f6ea7b3a770e5ec5d8855466027997e3bb462aaf51b8e62deee14c489dac"
+    },
+    {
+      "path": "src/platform/windows/native_hd.c",
+      "sha256": "28bba54922db68e32635cf3839ec60bfd75b2fe6ac66035fa13e85cb5759b085"
+    },
+    {
+      "path": "src/platform/windows/native_hd.h",
+      "sha256": "132ffefa9610857b1d4e740bd628adc2a2e57fb593dbcc256aa1a588aa5c9684"
+    },
+    {
+      "path": "tests/native_hd.c",
+      "sha256": "68b412e4f1d84512c65c959331b0fe093d867dbdf567104c2ab678ff8694c5e3"
+    },
+    {
+      "path": "tools/build-hd-pack.ps1",
+      "sha256": "d3c121e773fe1dae252517b79677ffdd194075ddd424a13b4eff75d454ac30db"
+    },
+    {
+      "path": "tools/hd_pack.cs",
+      "sha256": "9f21bf03e593469bb5780eb8a48666fccac95a741e344a9744a8884f05912a12"
+    },
+    {
+      "path": "tools/audit-portraits.ps1",
+      "sha256": "12a6938611174be03efa3a7f8ce9dea47611b5d7a893fa4028a5f055eed76657"
+    },
+    {
+      "path": "tools/import-hd-art.ps1",
+      "sha256": "8cbb0f5a5e30c49f1e390e1982c87e8049e4e51b14faa2d088b3791d88bd343c"
+    },
+    {
+      "path": "tools/hd_import.cs",
+      "sha256": "aebacfa6a3f10aea3839578da0cbf9ea29d501db9343cfb274081952771bf012"
+    },
+    {
+      "path": "tools/export-walk-sprites.ps1",
+      "sha256": "14c0f60c0451374b8eb5a5cfdc3e77669972f964f6b423b61b140521ac046965"
+    },
+    {
+      "path": "tools/export-world-art.ps1",
+      "sha256": "c279e6e55bf254dc37927c5beb4c42b154b949f27f886245554b0d7b922016b5"
+    },
+    {
+      "path": "tools/world_art_export.cs",
+      "sha256": "e2800e31876e2808962bd12228c4f3b7cd4195678ae848fcfaecb2f90a3b9504"
+    },
+    {
+      "path": "tools/export-battle-art.ps1",
+      "sha256": "1b0eb2fb06fb43abfe8f16b67ccb8cd0aa40a417c19d978e6829b10229c667d9"
+    },
+    {
+      "path": "tools/battle_art_export.cs",
+      "sha256": "16876e04afb185522427dab463373c97e8a70700267ad9dc627c0638db5db610"
+    },
+    {
+      "path": "tools/audit-redraw-progress.ps1",
+      "sha256": "0cbe7c38a6cb0de7da24e100086334a0cd566c0c78bcac0dd86069a3f9c8b6c0"
+    },
+    {
+      "path": "tools/check-redraw-sheets.ps1",
+      "sha256": "6937bbd2639a1b317879b46654c9e8b61c0b7ff343015c6eb37300773ff826e5"
     }
   ]
 }

@@ -130,6 +130,8 @@ typedef struct {
     unsigned cd_requests;
     JxEngineCall input_fallback;
     void *input_fallback_opaque;
+    JxEngineCall hd_fallback;
+    void *hd_fallback_opaque;
     unsigned menu_probe,input_probe_step,adaptive_resume_slot,adaptive_death_loaded;
     const uint16_t (*ui_events)[2];unsigned ui_count,ui_index;const char *ui_name;
     unsigned test_supply_stage,test_supply_edits;
@@ -182,7 +184,8 @@ typedef struct {
 static int host_save_browser(void *opaque,int mode) {
     Host *h=opaque;
     if(!h->interactive_entry || !h->window.handle || h->story_probe)return -2;
-    return jx_native_game_save_browser(&h->window,&h->c,mode);
+    int result=jx_native_game_save_browser(&h->window,&h->c,mode);
+    return result;
 }
 static Host host;
 static int input_poll(void *,JxInputEvent *);
@@ -697,9 +700,10 @@ static uint8_t video_in(void *p,uint16_t port) {
     }
     return h->device.in_byte(h->device.opaque,port);
 }
-static uint8_t video_read(void *p,uint32_t at){Host *h=p;at&=0xfffffu;if(at<0xa0000 || at>=0xb0000)return h->memory[at];uint8_t v=h->device.read_byte(h->device.opaque,at);if(h->video->error){fprintf(stderr,"native VGA read diagnostic: address=%08x error=%u map=%u position=(%u,%u) mode=%u read_map=%u\n",(unsigned)at,(unsigned)h->video->error,(unsigned)jx_word(&h->c,0x9334),(unsigned)jx_word(&h->c,0x8760),(unsigned)jx_word(&h->c,0x8762),(unsigned)h->video->mode,(unsigned)h->video->read_map);fail(h,"unsupported VGA read");}return v;}
-static void video_write(void *p,uint32_t at,uint8_t v){Host *h=p;at&=0xfffffu;if(at<0xa0000 || at>=0xb0000){h->memory[at]=v;return;}h->device.write_byte(h->device.opaque,at,v);if(h->video->error)fail(h,"unsupported VGA write");}
+static uint8_t video_read(void *p,uint32_t at){Host *h=p;at&=0xfffffu;if(at<0xa0000 || at>=0xb0000)return h->memory[at];jx_hd_read(h->window.hd,at);uint8_t v=h->device.read_byte(h->device.opaque,at);if(h->video->error){fprintf(stderr,"native VGA read diagnostic: address=%08x error=%u map=%u position=(%u,%u) mode=%u read_map=%u\n",(unsigned)at,(unsigned)h->video->error,(unsigned)jx_word(&h->c,0x9334),(unsigned)jx_word(&h->c,0x8760),(unsigned)jx_word(&h->c,0x8762),(unsigned)h->video->mode,(unsigned)h->video->read_map);fail(h,"unsupported VGA read");}return v;}
+static void video_write(void *p,uint32_t at,uint8_t v){Host *h=p;at&=0xfffffu;if(at<0xa0000 || at>=0xb0000){h->memory[at]=v;return;}jx_hd_write(h->window.hd,h->video,at);h->device.write_byte(h->device.opaque,at,v);if(h->video->error)fail(h,"unsupported VGA write");}
 static void native_video_bios(void *p,uint16_t mode){
+    jx_hd_reset(((Host *)p)->window.hd);
     Host *h=p;jx_video_startup_model_bios(&h->startup,mode);
     if(h->video->error)fail(h,"unsupported native video mode");
     h->legacy_mode=mode;h->device=jx_video_startup_model_bus(&h->startup);
@@ -937,7 +941,37 @@ static int ui_test_input(Host *h,JxInputEvent *event) {
         for(unsigned rgb=0;rgb<3;rgb++)fputc(h->palette[color*3+rgb]*4,f);
     }
     if(fclose(f))fail(h,"menu screenshot close failed");
+    if(h->window.hd){
+        snprintf(path,sizeof path,"main_decompiled/build/menu_%s_%02u_hd.bmp",h->ui_name,h->ui_index);
+        if(!jx_hd_export_bmp(h->window.hd,h->video,h->palette,path))fail(h,"HD menu screenshot failed");
+    }
     *event=(JxInputEvent){h->ui_events[h->ui_index][0],h->ui_events[h->ui_index][1],0,0};h->ui_index++;return 0;
+}
+static uint32_t native_hd_dispatch(void *p,uint16_t s,uint16_t o,const uint16_t *a,size_t n) {
+    Host *h=p;
+    int screen=h->legacy_mode!=18 && s==0x1f2a &&
+        ((n==0 && o==0x9182) ||
+         (n==1 && (o==0x864a || o==0x9952)));
+    if(screen)jx_hd_ui_begin(h->window.hd,h->video,h->palette,0);
+    if(h->legacy_mode!=18 && h->window.hd){
+        if(s==0x1000 && o==0x3146 && n==5)jx_hd_tile_copy(h->window.hd,&h->c,a,-1);
+        else if(s==0x1832 && o==0x185e && n==6)jx_hd_tile_copy(h->window.hd,&h->c,a,(int)(uint8_t)a[5]);
+    }
+    uint32_t result=h->hd_fallback(h->hd_fallback_opaque,s,o,a,n);
+    if(screen)jx_hd_ui_end(h->window.hd);
+    if(h->legacy_mode!=18 && s==0x1832 && h->window.hd) {
+        if((o==0x1c6c && n==6) || (o==0x1a28 && n==7))
+            jx_hd_blit(h->window.hd,&h->c,h->video,a,o==0x1a28?(int)(uint8_t)a[6]:-1);
+        else if(o==0x13b0 && n==6)
+            jx_hd_blit_planes(h->window.hd,&h->c,h->video,a);
+        else if(o==0x1250 && n==6)
+            jx_hd_tile_capture(h->window.hd,&h->c,h->video,a);
+        else if(o==0x1e88 && n==6){
+            jx_hd_dialogue_capture(h->window.hd,&h->c,h->video,h->palette,a);
+            jx_hd_capture(h->window.hd,&h->c,a);
+        }
+    }
+    return result;
 }
 static uint32_t native_input_dispatch(void *p,uint16_t s,uint16_t o,const uint16_t *a,size_t n) {
     Host *h=p;
@@ -2716,6 +2750,19 @@ static void menu_regression(Host *h) {
     static const uint16_t screens[][2]={{1,1},{0,0x39},{0,0x1c},{1,0x50},{0,0x1c},{1,1},{1,0x50},{0,0x39},{1,1},{1,1}};
     h->ui_events=screens;h->ui_count=sizeof screens/sizeof screens[0];h->ui_index=0;h->ui_name="screens";
     if(jx_game_loop_step(&h->c,(JxFarPointer){0,0x9600})!=JX_GAME_LOOP_PROCESSED || h->ui_index!=h->ui_count)fail(h,"status skill item return mismatch");
+    uint8_t notice_inventory[256];memcpy(notice_inventory,jx_ds(&h->c)+0x878a,sizeof notice_inventory);
+    jx_set_word(&h->c,0x878a,42);jx_set_word(&h->c,0x878c,2);
+    static const uint16_t notice_events[][2]={{0,0x39}};
+    h->ui_events=notice_events;h->ui_count=1;h->ui_index=0;h->ui_name="item_notice";
+    (void)JX_CALL(&h->c,0x1f2a,0x8cea,42,1);
+    if(h->ui_index!=1 || jx_word(&h->c,0x878c)!=3)fail(h,"item notification grant mismatch");
+    memcpy(jx_ds(&h->c)+0x878a,notice_inventory,sizeof notice_inventory);
+    static const uint16_t choices[][2]={{1,0x50},{0,0x39}};
+    h->ui_events=choices;h->ui_count=2;h->ui_index=0;h->ui_name="yes_no";
+    if((uint16_t)JX_CALL(&h->c,0x1f2a,0x7baa,100,100,0x04db,h->c.data_segment,0x04d4,h->c.data_segment)!=1 || h->ui_index!=2)fail(h,"two-choice selection mismatch");
+    static const uint16_t three[][2]={{1,0x48},{0,0x1c}};
+    h->ui_events=three;h->ui_count=2;h->ui_index=0;h->ui_name="three_choice";
+    if((uint16_t)JX_CALL(&h->c,0x1f2a,0x7e0e,100,60,0x04db,h->c.data_segment,0x04d4,h->c.data_segment,0x04db,h->c.data_segment)!=2 || h->ui_index!=2)fail(h,"three-choice selection mismatch");
     h->window.video=h->video;h->window.palette=h->palette;h->window.mode=&h->legacy_mode;
     unsigned start=(unsigned)h->video->start_high<<8;
     for(unsigned y=0;y<200;y++)for(unsigned x=0;x<320;x++) {
@@ -2726,7 +2773,7 @@ static void menu_regression(Host *h) {
     static const uint16_t browser_events[][2]={{1,0x4b},{1,0x48},{1,1}};
     h->ui_events=browser_events;h->ui_count=3;h->ui_index=0;h->ui_name="browser";
     if(jx_native_game_save_browser(&h->window,&h->c,0)!=-1 || h->ui_index!=3)fail(h,"browser paging cancel mismatch");
-    h->ui_events=NULL;printf("native menu system PASS: four main options, system toggles, safe exit default, status/skill/item returns, both confirmation keys, browser page 10 and cancellation\n");
+    h->ui_events=NULL;printf("native menu system PASS: four main options, system toggles, safe exit default, status/skill/item returns, two/three-choice wrapping, both confirmation keys, browser page 10 and cancellation\n");
 }
 int main(int argc,char **argv) {
     int resume_walk=argc>2 && strcmp(argv[2],"--adaptive-load-walkthrough-probe")==0;
@@ -2896,6 +2943,7 @@ int main(int argc,char **argv) {
         jx_native_audio_close(&h->audio);
         jx_native_cd_close(&h->cd);
         if(!window_probe || stopped==3)jx_native_window_close(&h->window);
+        if(h->window.hd){printf("HD presentation: assets=%u matched_draws=%u\n",jx_hd_asset_count(h->window.hd),jx_hd_hits(h->window.hd));jx_hd_close(h->window.hd);h->window.hd=NULL;}
         if(play)printf("native window: paints=%u timer_messages=%u\n",h->window.paints,h->window.ticks);
         for(unsigned i=1;i<128;i++)if(h->files[i])fclose(h->files[i]);
         if(stopped==2){if(h->ending_probe){if(h->exit_status || h->credits_frames<h->credits_limit)return 1;printf("native ending dialogue/images/credits/shutdown PASS: polls=%u credits=%u\n",h->story_poll_steps,h->credits_frames);}
@@ -2967,6 +3015,14 @@ int main(int argc,char **argv) {
     jx_dice_game_bridge_install(&h->c,&dice_game,(JxFarPointer){0x500,0x9f00});
     h->input_fallback=h->c.call;h->input_fallback_opaque=h->c.opaque;
     h->c.call=native_input_dispatch;h->c.opaque=h;
+    if(play || battle_probe || menu_system_probe || menus_probe || dice_probe) {
+        h->window.hd=jx_hd_open("hd");
+        if(h->window.hd) {
+            h->hd_fallback=h->c.call;h->hd_fallback_opaque=h->c.opaque;
+            h->c.call=native_hd_dispatch;h->c.opaque=h;
+            printf("HD assets enabled: %u assets, 1280x800, F8 toggles presentation\n",jx_hd_asset_count(h->window.hd));
+        }
+    }
     if(game && (!game_probe || window_probe || disc_probe || cd_probe || original_init_probe || resume_walk)){
         if(jx_native_cd_open(&h->cd,"../AudioCD.cue"))h->portable_media=0;
     }
@@ -3480,6 +3536,12 @@ world_ready:
         h->story_probe=1;h->battle_input=1;h->story_poll_steps=0;
         uint16_t result=jx_battle_run(&h->c,1,0,0xffff,(JxFarPointer){0,0xb000});
         h->story_probe=0;h->battle_input=0;export_state(h,"main_decompiled/build/native_battle_final.bin");
+        if(h->window.hd) {
+            if(!jx_hd_export_bmp(h->window.hd,h->video,h->palette,"main_decompiled/analysis/native_hd_battle_preview.bmp"))fail(h,"cannot export HD battle image");
+            printf("HD battle rendering: matched_draws=%u\n",jx_hd_hits(h->window.hd));
+            printf("HD superres matches: tiles=%u animation_frames=%u\n",jx_hd_tile_hits(h->window.hd),jx_hd_animation_hits(h->window.hd));
+            if(!jx_hd_hits(h->window.hd))fail(h,"HD battle did not match assets");
+        }
         printf("native battle completed: result=%u polls=%u\n",result,h->story_poll_steps);
         FILE *report=fopen("main_decompiled/analysis/native_battle_integration.json","wb");
         if(!report)fail(h,"cannot write native battle integration report");
@@ -3487,9 +3549,20 @@ world_ready:
         fclose(report);
     }
     if(window_probe){
+        if(h->window.hd && h->legacy_mode!=18) {
+            if(!jx_hd_export_bmp(h->window.hd,h->video,h->palette,"main_decompiled/analysis/native_hd_preview.bmp"))fail(h,"cannot export HD verification image");
+            printf("HD superres matches: tiles=%u animation_frames=%u\n",jx_hd_tile_hits(h->window.hd),jx_hd_animation_hits(h->window.hd));
+            FILE *hd_report=fopen("main_decompiled/analysis/native_hd_verification.json","wb");
+            if(!hd_report)fail(h,"cannot write HD verification report");
+            fprintf(hd_report,"{\"status\":\"%s\",\"width\":1280,\"height\":800,\"assets\":%u,\"matched_draws\":%u,\"scope\":\"Bounded native opening and 64 world frames; external IMG assets recognized. Unreplaced pixels, including live fonts, use exact nearest-neighbor 4x fallback.\"}\n",jx_hd_hits(h->window.hd)?"PASS":"FAIL",jx_hd_asset_count(h->window.hd),jx_hd_hits(h->window.hd));
+            fclose(hd_report);
+            if(!jx_hd_hits(h->window.hd))fail(h,"HD pack did not match any actual draw");
+        }
         if(h->cd.image && !h->cd.audio.plays)fail(h,"original CD audio was not submitted");
         printf("native CD waveOut submissions=%u plays=%u\n",h->cd.audio.plays,h->cd.plays);
         if(!h->audio.plays || !h->audio_irqs || !h->window.paints || h->window.ticks<64)fail(h,"whole window/audio fixture incomplete");
+        if(h->window.buffered_paints!=h->window.paints)fail(h,"window frame bypassed offscreen composition");
+        printf("native buffered presentation PASS: presents=%u paints=%u\n",h->window.buffered_paints,h->window.paints);
         printf("native whole window probe PASS: audio submissions=%u IRQs=%u paints=%u timers=%u\n",h->audio.plays,h->audio_irqs,h->window.paints,h->window.ticks);
         FILE *report=fopen("main_decompiled/analysis/native_game_window_audio_verification.json","wb");
         if(!report)fail(h,"cannot write whole window report");

@@ -12,7 +12,11 @@ try {
     $platformRoot = Join-Path $repoRoot 'src/platform/windows'
     $common = @('-std=c11','-Wall','-Wextra','-Werror')
     if ($Target -in @('All','Game')) {
+        $hdObject = Join-Path $outputRoot 'native_hd.o'
+        & $compiler cc @common -O2 -c (Join-Path $platformRoot 'native_hd.c') '-I' (Join-Path $repoRoot 'src/engine') '-o' $hdObject
+        if ($LASTEXITCODE -ne 0) { throw 'HD presentation compilation failed' }
         $platform = @('resource_host.c','native_window.c','native_audio.c','native_cd.c','native_saves.c') | ForEach-Object { Join-Path $platformRoot $_ }
+        $platform += $hdObject
         & $compiler cc @common @sources @platform '-I' (Join-Path $repoRoot 'src/engine') '-I' (Join-Path $repoRoot 'tests/routes') '-lgdi32' '-luser32' '-lwinmm' '-Wl,/Brepro' '-Wl,--build-id=none' '-o' (Join-Path $outputRoot 'jx_native.exe')
         if ($LASTEXITCODE -ne 0) { throw 'Game compilation failed' }
     }

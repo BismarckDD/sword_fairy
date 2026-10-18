@@ -2,7 +2,7 @@
 from pathlib import Path
 import hashlib,json,re,sys
 root=Path(__file__).resolve().parents[1]
-allowed={'.c','.h','.py','.ps1','.md','.json','.txt','.yml','.yaml'}
+allowed={'.c','.h','.cs','.py','.ps1','.md','.json','.txt','.yml','.yaml'}
 ignored={'.git','build','runtime','original','.cache','.venv','__pycache__'}
 count=0
 for p in root.rglob('*'):

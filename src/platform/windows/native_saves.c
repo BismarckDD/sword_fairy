@@ -100,8 +100,10 @@ static uint8_t nearest_color(Browser *b,uint32_t color,uint16_t *cache) {
     }
     cache[key]=(uint16_t)best;return (uint8_t)best;
 }
-static void draw_browser(Browser *b,const uint8_t *background) {
-    backdrop(b,background,1);border(b,0,0,320,200);border(b,132,18,184,162);
+static void draw_browser(Browser *b) {
+    /* A solid panel keeps scene pixels from shrinking with the browser. */
+    for(unsigned y=0;y<200;y++)for(unsigned x=0;x<320;x++)put_pixel(b,x,y,0);
+    border(b,0,0,320,200);border(b,132,18,184,162);
     wchar_t text[96];swprintf(text,96,L"%ls  %d/10",b->writing?L"存档":L"读档",b->selected/10+1);game_text(b,4,1,text,0);
     int first=b->selected/10*10;
     for(int i=first;i<SLOTS && i<first+10;i++) {
@@ -151,6 +153,7 @@ int jx_native_game_save_browser(JxNativeWindow *window,JxEventContext *c,int wri
     uint8_t *ds=jx_ds(c);
     if(writing==2)return jx_native_save_browser(window,ds,2);
     if(!window->save_scene_valid)(void)jx_native_save_browser(window,ds,2);
+    jx_hd_ui_begin(window->hd,window->video,window->palette,1);
     Browser b={0};b.window=window;b.ds=ds;b.c=c;b.selected=last_slot;b.writing=writing;b.result=-1;
     uint8_t background[320*200];unsigned start=screen_start(&b);
     for(unsigned y=0;y<200;y++)for(unsigned x=0;x<320;x++)background[y*320+x]=window->video->planes[x&3][(start+y*80+x/4)&65535];
@@ -159,7 +162,7 @@ int jx_native_game_save_browser(JxNativeWindow *window,JxEventContext *c,int wri
     for(int i=0;i<SLOTS;i++)inspect(&b,i);
     (void)JX_CALL0(c,0x1f2a,0xc24e);
     while(!b.done) {
-        draw_browser(&b,background);JxFarPointer input={0x100,0x9d00};
+        draw_browser(&b);JxFarPointer input={0x100,0x9d00};
         for(;;) {
             while((uint16_t)JX_CALL(c,0x1f2a,0xc1f2,input.offset,input.segment)!=0){}
             uint16_t type=jx_far_word(c,input.segment,input.offset),key=jx_far_word(c,input.segment,(uint16_t)(input.offset+2));
@@ -183,5 +186,6 @@ int jx_native_game_save_browser(JxNativeWindow *window,JxEventContext *c,int wri
         }
     }
     backdrop(&b,background,0);(void)JX_CALL(c,0x1832,0x1810,draw_page/0x4000);
-    (void)JX_CALL(c,0x1f2a,0x06f2,80,0,77);(void)JX_CALL0(c,0x1f2a,0xc24e);jx_native_window_present(window);return b.result;
+    (void)JX_CALL(c,0x1f2a,0x06f2,80,0,77);(void)JX_CALL0(c,0x1f2a,0xc24e);
+    jx_hd_ui_end(window->hd);jx_native_window_present(window);return b.result;
 }
