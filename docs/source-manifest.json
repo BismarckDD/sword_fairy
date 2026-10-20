@@ -2,6 +2,10 @@
   "scope": "Current source based on the verified local reconstruction, including native timing, 99-slot saves, game-native menus and optional 1280x800 four-times asset presentation; no original game resources or generated assets included.",
   "files": [
     {
+      "path": "scripts/test-hd.ps1",
+      "sha256": "c9b093a44db96a9b63cc010019da1167351d2d94a3962df556cde50e4d56c992"
+    },
+    {
       "path": "src/engine/actor.c",
       "sha256": "f91e0cb37aa1234c09b48a7397aaec079591e998e8a6f2ffa106fe52761f33d0"
     },
@@ -910,6 +914,14 @@
       "sha256": "ad22b1cbb3d11d6669edae1b88761a383ecdaba235271d0530c3607a6351234a"
     },
     {
+      "path": "src/platform/windows/native_hd.c",
+      "sha256": "f7d47071d5064f27e3d283124333807970c481d6bda08bf2dfb76610cb9dac31"
+    },
+    {
+      "path": "src/platform/windows/native_hd.h",
+      "sha256": "885b9b33df4955b19ffeab91615ca84fb2799eb7311503e42456eaa69b8c7f45"
+    },
+    {
       "path": "src/platform/windows/native_saves.c",
       "sha256": "7696114bd09482d6f3656debe6f3c02aee8590ac9f8316a2f8368bf5bd51eb3c"
     },
@@ -923,7 +935,7 @@
     },
     {
       "path": "src/platform/windows/resource_host.c",
-      "sha256": "45216067c4c334f1644cb63851c9dd2053c736ea8deb766a437c19a135f85b60"
+      "sha256": "fcb865e0bc9ec212b09fcace96ea6b3f5e157f92c304e6d31a5f4a5bfc274e76"
     },
     {
       "path": "tests/item_description.c",
@@ -932,6 +944,18 @@
     {
       "path": "tests/menu_navigation.c",
       "sha256": "eee8f47754d2a1cf58b0b05ffc4e65e07fa8a8a55a358f3db08f5099398134d0"
+    },
+    {
+      "path": "tests/native_hd.c",
+      "sha256": "a02fe0cd420e1cc7a3d68452d0e129c6fdb0e60089f79378c74a46d009be098f"
+    },
+    {
+      "path": "tests/native_hd_perf.c",
+      "sha256": "3cc46897736a89796269948b72db4c53891f13c6cbf1070ec21582a4926983a1"
+    },
+    {
+      "path": "tests/native_hd_walk.c",
+      "sha256": "666d9d0cb3aa0bcf188af86b24c418de434af310be9b4af0c35fe223ad2d8e26"
     },
     {
       "path": "tests/native_save_browser.c",
@@ -1338,44 +1362,28 @@
       "sha256": "1234544bfbcf1b1ef2acb72e67e39b16b3834f3672983eb212c9e6460a7526a3"
     },
     {
-      "path": "tools/extract_memory.py",
-      "sha256": "df9cf6d7a574bb55e1bdf9e0ac1667f5315778264fb9d6a1ab0c3edc13661bec"
+      "path": "tools/audit-portraits.ps1",
+      "sha256": "12a6938611174be03efa3a7f8ce9dea47611b5d7a893fa4028a5f055eed76657"
     },
     {
-      "path": "scripts/test-hd.ps1",
-      "sha256": "ee18f6ea7b3a770e5ec5d8855466027997e3bb462aaf51b8e62deee14c489dac"
+      "path": "tools/audit-redraw-progress.ps1",
+      "sha256": "0cbe7c38a6cb0de7da24e100086334a0cd566c0c78bcac0dd86069a3f9c8b6c0"
     },
     {
-      "path": "src/platform/windows/native_hd.c",
-      "sha256": "ebe0d64bb43484a3f792594f77637c5024970389472e7cfc5a83e24c6539e374"
-    },
-    {
-      "path": "src/platform/windows/native_hd.h",
-      "sha256": "9c18d4659bb61ab846ec4b0b3065013e708c6fecdcc43f60fd2e0818de481aac"
-    },
-    {
-      "path": "tests/native_hd.c",
-      "sha256": "a02fe0cd420e1cc7a3d68452d0e129c6fdb0e60089f79378c74a46d009be098f"
+      "path": "tools/battle_art_export.cs",
+      "sha256": "16876e04afb185522427dab463373c97e8a70700267ad9dc627c0638db5db610"
     },
     {
       "path": "tools/build-hd-pack.ps1",
       "sha256": "d3c121e773fe1dae252517b79677ffdd194075ddd424a13b4eff75d454ac30db"
     },
     {
-      "path": "tools/hd_pack.cs",
-      "sha256": "9f21bf03e593469bb5780eb8a48666fccac95a741e344a9744a8884f05912a12"
+      "path": "tools/check-redraw-sheets.ps1",
+      "sha256": "6937bbd2639a1b317879b46654c9e8b61c0b7ff343015c6eb37300773ff826e5"
     },
     {
-      "path": "tools/audit-portraits.ps1",
-      "sha256": "12a6938611174be03efa3a7f8ce9dea47611b5d7a893fa4028a5f055eed76657"
-    },
-    {
-      "path": "tools/import-hd-art.ps1",
-      "sha256": "8cbb0f5a5e30c49f1e390e1982c87e8049e4e51b14faa2d088b3791d88bd343c"
-    },
-    {
-      "path": "tools/hd_import.cs",
-      "sha256": "aebacfa6a3f10aea3839578da0cbf9ea29d501db9343cfb274081952771bf012"
+      "path": "tools/export-battle-art.ps1",
+      "sha256": "1b0eb2fb06fb43abfe8f16b67ccb8cd0aa40a417c19d978e6829b10229c667d9"
     },
     {
       "path": "tools/export-walk-sprites.ps1",
@@ -1386,32 +1394,40 @@
       "sha256": "c279e6e55bf254dc37927c5beb4c42b154b949f27f886245554b0d7b922016b5"
     },
     {
-      "path": "tools/world_art_export.cs",
-      "sha256": "e2800e31876e2808962bd12228c4f3b7cd4195678ae848fcfaecb2f90a3b9504"
+      "path": "tools/extract_memory.py",
+      "sha256": "df9cf6d7a574bb55e1bdf9e0ac1667f5315778264fb9d6a1ab0c3edc13661bec"
     },
     {
-      "path": "tools/export-battle-art.ps1",
-      "sha256": "1b0eb2fb06fb43abfe8f16b67ccb8cd0aa40a417c19d978e6829b10229c667d9"
+      "path": "tools/hd_import.cs",
+      "sha256": "aebacfa6a3f10aea3839578da0cbf9ea29d501db9343cfb274081952771bf012"
     },
     {
-      "path": "tools/battle_art_export.cs",
-      "sha256": "16876e04afb185522427dab463373c97e8a70700267ad9dc627c0638db5db610"
+      "path": "tools/hd_pack.cs",
+      "sha256": "9f21bf03e593469bb5780eb8a48666fccac95a741e344a9744a8884f05912a12"
     },
     {
-      "path": "tools/audit-redraw-progress.ps1",
-      "sha256": "0cbe7c38a6cb0de7da24e100086334a0cd566c0c78bcac0dd86069a3f9c8b6c0"
+      "path": "tools/import-all-sprites.py",
+      "sha256": "86749edd2ea925f2c0c404e33d8c3ebf3668fd5cff6109ab232ee500bdcba350"
     },
     {
-      "path": "tools/check-redraw-sheets.ps1",
-      "sha256": "6937bbd2639a1b317879b46654c9e8b61c0b7ff343015c6eb37300773ff826e5"
+      "path": "tools/import-handpaint-walk.py",
+      "sha256": "b280d1642bf85a9ed59bb9187b7315d94b7281ab9b77b015b67ed550294a0c1e"
     },
     {
-      "path": "tests/native_hd_perf.c",
-      "sha256": "3cc46897736a89796269948b72db4c53891f13c6cbf1070ec21582a4926983a1"
+      "path": "tools/import-hd-art.ps1",
+      "sha256": "8cbb0f5a5e30c49f1e390e1982c87e8049e4e51b14faa2d088b3791d88bd343c"
+    },
+    {
+      "path": "tools/refine-remaster.py",
+      "sha256": "a67bb6c227bafc993ae9c42d06688d49b44857c0e69c68923bdb99e9b5bba9e9"
     },
     {
       "path": "tools/remaster-assets.py",
       "sha256": "c71dab389a8b540061df630bd6b6d4236bb0e9240fdabc56bea5cee6b02e934a"
+    },
+    {
+      "path": "tools/world_art_export.cs",
+      "sha256": "e2800e31876e2808962bd12228c4f3b7cd4195678ae848fcfaecb2f90a3b9504"
     }
   ]
 }

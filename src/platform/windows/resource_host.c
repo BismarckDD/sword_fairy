@@ -949,6 +949,7 @@ static int ui_test_input(Host *h,JxInputEvent *event) {
 }
 static uint32_t native_hd_dispatch(void *p,uint16_t s,uint16_t o,const uint16_t *a,size_t n) {
     Host *h=p;
+    if(s==0x2f28 && o==0x4384 && n==2)jx_hd_walk_source(h->window.hd,a[0],a[1]);
     int screen=h->legacy_mode!=18 && s==0x1f2a &&
         ((n==0 && o==0x9182) ||
          (n==1 && (o==0x864a || o==0x9952)));
@@ -958,6 +959,7 @@ static uint32_t native_hd_dispatch(void *p,uint16_t s,uint16_t o,const uint16_t 
         else if(s==0x1832 && o==0x185e && n==6)jx_hd_tile_copy(h->window.hd,&h->c,a,(int)(uint8_t)a[5]);
     }
     uint32_t result=h->hd_fallback(h->hd_fallback_opaque,s,o,a,n);
+    if(s==0x1f2a && o==0xc264 && n==2)jx_hd_walk_slot(h->window.hd,a[0],a[1],jx_word(&h->c,(uint16_t)(0x31ce + 18*a[0]+14)));
     if(screen)jx_hd_ui_end(h->window.hd);
     if(h->legacy_mode!=18 && s==0x1832 && h->window.hd) {
         if((o==0x1c6c && n==6) || (o==0x1a28 && n==7))
@@ -3551,6 +3553,7 @@ world_ready:
         if(h->window.hd) {
             if(!jx_hd_export_bmp(h->window.hd,h->video,h->palette,"main_decompiled/analysis/native_hd_battle_preview.bmp"))fail(h,"cannot export HD battle image");
             printf("HD battle rendering: matched_draws=%u\n",jx_hd_hits(h->window.hd));
+            printf("HD handpaint walk tiles=%u\n",jx_hd_walk_hits(h->window.hd));
             printf("HD superres matches: tiles=%u animation_frames=%u\n",jx_hd_tile_hits(h->window.hd),jx_hd_animation_hits(h->window.hd));
             if(!jx_hd_hits(h->window.hd))fail(h,"HD battle did not match assets");
         }
@@ -3563,6 +3566,7 @@ world_ready:
     if(window_probe){
         if(h->window.hd && h->legacy_mode!=18) {
             if(!jx_hd_export_bmp(h->window.hd,h->video,h->palette,"main_decompiled/analysis/native_hd_preview.bmp"))fail(h,"cannot export HD verification image");
+            printf("HD handpaint walk tiles=%u\n",jx_hd_walk_hits(h->window.hd));
             printf("HD superres matches: tiles=%u animation_frames=%u\n",jx_hd_tile_hits(h->window.hd),jx_hd_animation_hits(h->window.hd));
             FILE *hd_report=fopen("main_decompiled/analysis/native_hd_verification.json","wb");
             if(!hd_report)fail(h,"cannot write HD verification report");

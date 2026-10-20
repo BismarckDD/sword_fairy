@@ -5,6 +5,11 @@ typedef struct JxHd JxHd;
 /* Optional native presentation adapter; never writes guest game state. */
 JxHd *jx_hd_open(const char *directory);
 void jx_hd_close(JxHd *);
+void jx_hd_walk_slot(JxHd *,unsigned slot,unsigned resource,unsigned base);
+void jx_hd_walk_source(JxHd *,unsigned kind,unsigned index);
+unsigned jx_hd_walk_resources(const JxHd *);
+unsigned jx_hd_walk_cache_bytes(const JxHd *);
+unsigned jx_hd_walk_hits(const JxHd *);
 unsigned jx_hd_asset_count(const JxHd *);
 unsigned jx_hd_hits(const JxHd *);
 unsigned jx_hd_tile_hits(const JxHd *);

@@ -14,6 +14,10 @@ try {
     if($LASTEXITCODE -ne 0){throw 'HD test compilation failed'}
     & ./build/native_hd_test.exe
     if($LASTEXITCODE -ne 0){throw 'HD adapter verification failed'}
+    & $compiler cc @common tests/native_hd_walk.c build/native_hd_test.o -o build/native_hd_walk.exe
+    if($LASTEXITCODE -ne 0){throw 'Handpaint test compilation failed'}
+    & ./build/native_hd_walk.exe
+    if($LASTEXITCODE -ne 0){throw 'Handpaint verification failed'}
     $sources=@(Get-ChildItem src/engine -Filter events_*.c | ForEach-Object FullName)
     foreach($name in @('native_window_hd','native_window_timing')) {
         & $compiler cc @common @sources "tests/$name.c" src/platform/windows/native_window.c src/platform/windows/native_saves.c build/native_hd_test.o -lgdi32 -luser32 -lwinmm -o "build/$name.exe"
