@@ -60,14 +60,18 @@ def import_one(a):
  if not source.exists() or not layout_file.exists():return 'pending'
  source_stat=source.stat();layout_stat=layout_file.stat()
  plan_hash=digest(json.dumps(a,sort_keys=True).encode('utf-8'))
+ layout=json.loads(layout_file.read_text(encoding='utf-8-sig'))
+ overlay_file=ART/layout['registered_overlay'] if layout.get('registered_overlay') else None
  stamp=[source_stat.st_size,source_stat.st_mtime_ns,layout_stat.st_size,layout_stat.st_mtime_ns]
+ if overlay_file:
+  overlay_stat=overlay_file.stat();stamp.extend([overlay_stat.st_size,overlay_stat.st_mtime_ns])
  if record.exists():
   prior=json.loads(record.read_text(encoding='utf-8'))
-  if prior.get('status')=='ready' and prior.get('source_stamp')==stamp and prior.get('registration_version')==8 and prior.get('plan_sha256')==plan_hash and (HD/prior['binary']).is_file():return 'ready'
- source_hash=digest(source.read_bytes());layout_hash=digest(layout_file.read_bytes())
+  if prior.get('status')=='ready' and prior.get('source_stamp')==stamp and prior.get('registration_version')==8 and prior.get('plan_sha256')==plan_hash and (HD/prior['binary']).is_file() and (prior.get('art_width')!=96 or Path(str(HD/prior['binary'])+'.wide').is_file()):return 'ready'
+ source_hash=digest(source.read_bytes());layout_hash=digest(layout_file.read_bytes()+(overlay_file.read_bytes() if overlay_file else b''))
  if record.exists():
   prior=json.loads(record.read_text(encoding='utf-8'))
-  if prior.get('status')=='ready' and prior.get('source_sha256')==source_hash and prior.get('registration_version')==8 and prior.get('plan_sha256')==plan_hash and prior.get('layout_sha256')==layout_hash and (HD/prior['binary']).is_file():return 'ready'
+  if prior.get('status')=='ready' and prior.get('source_sha256')==source_hash and prior.get('registration_version')==8 and prior.get('plan_sha256')==plan_hash and prior.get('layout_sha256')==layout_hash and (HD/prior['binary']).is_file() and (prior.get('art_width')!=96 or Path(str(HD/prior['binary'])+'.wide').is_file()):return 'ready'
  image=Image.open(source).convert('RGBA');rgba=np.asarray(image);transparent=float((rgba[:,:,3]<32).mean())
  if transparent<.08:raise ValueError('Source has insufficient real transparency')
  layout=json.loads(layout_file.read_text(encoding='utf-8-sig')) if layout_file.exists() else {}
@@ -75,6 +79,8 @@ def import_one(a):
  sequence=poses(a);bodies=[];boxes=[];original=Image.open(a['source']).convert('RGBA')
  fw,fh=a['width']*4,a['height']*4;foot=[];original_heights=[]
  art_width=layout.get('wide_width',fw)
+ overlay=Image.open(overlay_file).convert('RGBA') if overlay_file else None
+ if overlay is not None and overlay.size!=(art_width*a['columns'],fh*a['rows']):raise ValueError('Registered overlay size mismatch')
  if art_width!=fw and (fw!=64 or art_width!=96):raise ValueError('Wide artwork requires a single-column 96px drawing cell')
  for k,pose in enumerate(sequence):
   if layout.get('pose_map'):x,y=layout['pose_map'][k]
@@ -100,8 +106,8 @@ def import_one(a):
  # Their reviewed target keeps the person comparable to ordinary map actors.
  if a.get('target_height'):target=a['target_height']
  target=min(target,fh-4)
- # One scale for both axes and every frame. Wide steps must never squeeze
- # the head/body sideways; fit the complete animation inside its native cell.
+ # One scale for both axes and every frame. Explicit wide layouts retain
+ # the native core plus a presentation-only margin instead of squeezing it.
  height_scale=target/max_h
  scale=min(height_scale,(art_width-4)/max_w)
  horizontal=1.0
@@ -118,6 +124,12 @@ def import_one(a):
    if body.width>art_width or body.height>fh:raise ValueError('Registered pose outside frame')
    # Uniform character scale; only the source frame's original foot level varies.
    bottom=max(body.height,min(fh,foot[k]));cell.alpha_composite(body,((art_width-body.width)//2,bottom-body.height));heights.append(body.height)
+  for patch in layout.get('registered_overlay_regions',[]):
+   if patch['frame']==k:
+    if overlay is None:raise ValueError('Missing registered overlay')
+    x0,y0,x1,y1=patch['box'];assert 0<=x0<x1<=art_width and 0<=y0<y1<=fh
+    ox,oy=pose['x']*art_width,pose['y']*fh
+    cell.paste(overlay.crop((ox+x0,oy+y0,ox+x1,oy+y1)),(x0,y0))
   normal.alpha_composite(cell,(pose['x']*art_width,pose['y']*fh))
   for ty in range(h):
    for tx in range(w):
@@ -187,6 +199,13 @@ def verify():
   data=(HD/r['binary']).read_bytes()
   assert digest(data)==r['binary_sha256'] and data[:8]==b'JXWALK1\0'
   assert struct.unpack_from('<I',data,8)[0]==r['tile_count'] and len(data)==780+r['tile_count']*16384 and data[12:780]==palette
+  if r.get('art_width')==96:
+   wide=Path(str(HD/r['binary'])+'.wide').read_bytes();assert wide[:8]==b'JXWIDE1\0'
+   assert struct.unpack_from('<II',wide,8)==(r['tile_count'],96) and len(wide)==16+r['tile_count']*96*64*4
+   for tile in range(r['tile_count']):
+    full=np.frombuffer(wide,dtype=np.uint8,offset=16+tile*96*64*4,count=96*64*4).reshape(64,96,4)
+    core=np.frombuffer(data,dtype=np.uint8,offset=780+tile*64*64*4,count=64*64*4).reshape(64,64,4)
+    assert np.array_equal(full[:,16:80],core)
   if r['standing']:assert 148<=r['height_max']<=172 and r['horizontal_fit']>=.65
   records.append(r)
  geometry=(PACK/'geometry.bin').read_bytes();assert geometry[:8]==b'JXWGEO1\0';assert struct.unpack_from('<I',geometry,8)[0]==len(records)

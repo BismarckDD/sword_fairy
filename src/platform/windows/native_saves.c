@@ -146,13 +146,19 @@ static int overwrite(Browser *b) {
 int jx_native_save_browser(JxNativeWindow *window,uint8_t *ds,int mode) {
     (void)ds;if(mode!=2)return -2;
     jx_native_window_present(window);unsigned width=window->mode && *window->mode==18?640:320,height=width==640?480:200;
-    for(unsigned y=0;y<100;y++)for(unsigned x=0;x<160;x++)window->save_scene[y*160+x]=window->pixels[(y*height/100)*width+x*width/160];
+    const uint32_t *pixels=window->pixels;
+    if(width==320 && window->hd && !window->hd_disabled && !window->hd_suspended){
+        pixels=jx_hd_render(window->hd,window->video,window->palette);width=1280;height=800;
+    }
+    for(unsigned y=0;y<100;y++)for(unsigned x=0;x<160;x++)window->save_scene[y*160+x]=pixels[(y*height/100)*width+x*width/160];
     window->save_scene_valid=1;return 0;
 }
 int jx_native_game_save_browser(JxNativeWindow *window,JxEventContext *c,int writing) {
     uint8_t *ds=jx_ds(c);
     if(writing==2)return jx_native_save_browser(window,ds,2);
     if(!window->save_scene_valid)(void)jx_native_save_browser(window,ds,2);
+    void *scene=jx_hd_scene_save(window->hd);
+    if(window->hd && !scene)return -1;
     jx_hd_ui_begin(window->hd,window->video,window->palette,1);
     Browser b={0};b.window=window;b.ds=ds;b.c=c;b.selected=last_slot;b.writing=writing;b.result=-1;
     uint8_t background[320*200];unsigned start=screen_start(&b);
@@ -166,7 +172,14 @@ int jx_native_game_save_browser(JxNativeWindow *window,JxEventContext *c,int wri
         for(;;) {
             while((uint16_t)JX_CALL(c,0x1f2a,0xc1f2,input.offset,input.segment)!=0){}
             uint16_t type=jx_far_word(c,input.segment,input.offset),key=jx_far_word(c,input.segment,(uint16_t)(input.offset+2));
-            if(type==8){jx_music_poll(c);continue;}
+            if(type==8){
+                jx_music_poll(c);
+                Slot *selected_slot=&b.slots[b.selected];wchar_t place[40],label[96];
+                scene_text(selected_slot->scene,place,40);
+                swprintf(label,96,L"%02d %ls",b.selected+1,!selected_slot->state?L"空存档":selected_slot->state==2?L"异常":place);
+                game_text(&b,4,(unsigned)(18+(b.selected%10)*16),label,1);
+                jx_native_window_present(window);continue;
+            }
             if(type==1 && key==1){b.done=1;break;}
             if(type==1 && (key==0x48 || key==0x50)) {
                 int first=b.selected/10*10,count=first==90?9:10;b.selected=first+(b.selected-first+(key==0x48?count-1:1))%count;break;
@@ -187,5 +200,6 @@ int jx_native_game_save_browser(JxNativeWindow *window,JxEventContext *c,int wri
     }
     backdrop(&b,background,0);(void)JX_CALL(c,0x1832,0x1810,draw_page/0x4000);
     (void)JX_CALL(c,0x1f2a,0x06f2,80,0,77);(void)JX_CALL0(c,0x1f2a,0xc24e);
-    jx_hd_ui_end(window->hd);jx_native_window_present(window);return b.result;
+    jx_hd_ui_end(window->hd);jx_hd_scene_restore(window->hd,scene);
+    jx_native_window_present(window);return b.result;
 }

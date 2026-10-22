@@ -5,6 +5,67 @@
 #include <mmsystem.h>
 #include <wchar.h>
 #include "native_window.h"
+/* Pick from the live game palette so native glyphs retain their pixel shape
+ * in both the original and HD presentation, without recoloring scenery. */
+uint16_t jx_native_selection_color(const JxNativeWindow *d) {
+    if(!d->palette)return 47;
+    unsigned phase=(unsigned)(GetTickCount64()%1000);
+    unsigned glow=phase<500?phase:1000-phase;
+    int red=200+(int)(55*glow/500),green=150+(int)(85*glow/500),blue=20+(int)(45*glow/500);
+    unsigned best=0,distance=~0u;
+    for(unsigned i=0;i<256;i++) {
+        int r=(int)d->palette[i*3]*4-red,g=(int)d->palette[i*3+1]*4-green,b=(int)d->palette[i*3+2]*4-blue;
+        unsigned delta=(unsigned)(r*r+g*g+b*b);
+        if(delta<distance){distance=delta;best=i;}
+    }
+    return (uint16_t)best;
+}
+/* Keep the title artwork intact; selection is conveyed by the lettering. */
+static void paint_title_menu(JxNativeWindow *d,HDC dc,int left,int top,int width,int height) {
+    if(!d->title_visible || width<=0 || height<=0)return;
+    int saved=SaveDC(dc);if(!saved)return;
+    unsigned phase=(unsigned)(GetTickCount64()%1000);
+    unsigned glow=phase<500?phase:1000-phase;
+    for(unsigned i=0;i<2;i++) {
+        COLORREF color=i==d->title_selection?RGB(200+55*glow/500,150+85*glow/500,20+45*glow/500):RGB(255,255,255);
+        /* The original 16x16 resource glyphs, enlarged on the game's pixel grid. */
+        for(int pass=1;pass>=0;pass--) {
+            SetDCBrushColor(dc,pass?RGB(25,19,9):color);
+            for(unsigned ch=0;ch<4;ch++)for(unsigned y=0;y<16;y++)for(unsigned x=0;x<16;x++) {
+                if(!(d->title_glyphs[i][ch][y*2+x/8]&(0x80>>(x%8))))continue;
+                int px=200+(int)ch*16+(int)x+pass,py=50+(int)i*20+(int)y+pass;
+                RECT pixel={left+px*width/320,top+py*height/200,
+                    left+(px+1)*width/320,top+(py+1)*height/200};
+                FillRect(dc,&pixel,(HBRUSH)GetStockObject(DC_BRUSH));
+            }
+        }
+    }
+    RestoreDC(dc,saved);
+}
+uint16_t jx_native_title_menu(JxNativeWindow *d,JxEventContext *c,JxFarPointer event) {
+    const wchar_t *labels[]={L"新的故事",L"旧的回忆"};
+    uint8_t previous_glyph[32];memcpy(previous_glyph,jx_ds(c)+0x2724,32);
+    for(unsigned row=0;row<2;row++)for(unsigned ch=0;ch<4;ch++) {
+        char gb[2];
+        if(WideCharToMultiByte(936,0,&labels[row][ch],1,gb,2,NULL,NULL)!=2)continue;
+        (void)jx_font_load_double(c,(uint16_t)(((uint8_t)gb[0]<<8)|(uint8_t)gb[1]));
+        memcpy(d->title_glyphs[row][ch],jx_ds(c)+0x2724,32);
+    }
+    memcpy(jx_ds(c)+0x2724,previous_glyph,32);
+    d->title_selection=0;d->title_visible=1;jx_native_window_present(d);
+    (void)JX_CALL0(c,0x1f2a,0xc24e);
+    for(;;) {
+        while((uint16_t)JX_CALL(c,0x1f2a,0xc1f2,event.offset,event.segment)!=0) {}
+        uint16_t type=jx_far_word(c,event.segment,event.offset);
+        uint16_t key=jx_far_word(c,event.segment,(uint16_t)(event.offset+2));
+        if(type==1 && (key==0x50 || key==0x48)) {
+            d->title_selection^=1;jx_native_window_present(d);
+        }
+        if(type==0 && (key==0x1c || key==0x39)) {
+            d->title_visible=0;jx_native_window_present(d);return (uint16_t)d->title_selection;
+        }
+    }
+}
 /* Presentation-only battle status: never writes the original game memory. */
 void jx_native_battle_begin(JxNativeWindow *d,JxEventContext *c,uint16_t encounter,uint16_t first,uint16_t second) {
     d->battle_context=c;d->battle_actors[0]=first;d->battle_actors[1]=second;
@@ -143,6 +204,7 @@ static LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM w,LPARAM l) {
         FillRect(back,&size,(HBRUSH)GetStockObject(BLACK_BRUSH));
         if(tw>0 && th>0)StretchDIBits(back,left,top,tw,th,0,0,(int)width,(int)height,pixels,&info,DIB_RGB_COLORS,SRCCOPY);
         if(!d->mode || *d->mode!=18)paint_battle_status(d,back,left,top,tw,th);
+        if(!d->mode || *d->mode!=18)paint_title_menu(d,back,left,top,tw,th);
         if(BitBlt(dc,0,0,size.right,size.bottom,back,0,0,SRCCOPY))d->buffered_paints++;
         EndPaint(hwnd,&paint);return 0;
     }

@@ -56,6 +56,9 @@ static uint16_t action_menu_run(JxEventContext *c,uint16_t x,uint16_t y,uint16_t
         while((uint16_t)JX_CALL(c,0x1f2a,0xc1f2,input.offset,input.segment)!=0){}
         uint16_t type=jx_far_word(c,input.segment,input.offset);
         if(type==8) {
+            (void)JX_CALL(c,0x1f2a,0x06f2,47,0,77);
+            menu_text(c,x,y,labels,selected);
+            (void)JX_CALL(c,0x1f2a,0x06f2,80,0,77);
             ticks=(uint16_t)(ticks+1);
             if(jx_signed_word(jx_word(c,0x050c))>0 && jx_signed_word(ticks)%3==0) {
                 uint16_t track=jx_word(c,0xacea)!=0?14:jx_word(c,0x889a);

@@ -47,14 +47,21 @@ void jx_game_initialize(JxEventContext *c) {
     }
     (void)JX_CALL(c,0x1832,0x21d8,0x932c,c->data_segment);
     (void)JX_CALL(c,0x1f2a,0x60ac);
-    (void)JX_CALL(c,0x1f2a,0x58fa,0x04ca,c->data_segment);
-    if((uint16_t)JX_CALL(c,0x1f2a,0x7baa,200,50,0x04db,c->data_segment,0x04d4,c->data_segment)==0) {
-        boot_clear(c);boot_palette(c);boot_font(c);
-        (void)JX_CALL(c,0x1f2a,0x629e);
-        (void)JX_CALL(c,0x1f2a,0x6700,jx_word(c,0x9334),0);
-    } else {
+    for(;;) {
+        (void)JX_CALL(c,0x1f2a,0x58fa,0x04ca,c->data_segment);
+        if((uint16_t)JX_CALL(c,0x1f2a,0x7baa,200,50,0x04db,c->data_segment,0x04d4,c->data_segment)==0) {
+            boot_clear(c);boot_palette(c);boot_font(c);
+            (void)JX_CALL(c,0x1f2a,0x629e);
+            (void)JX_CALL(c,0x1f2a,0x6700,jx_word(c,0x9334),0);
+            break;
+        }
         boot_font(c);boot_clear(c);boot_palette(c);
-        while((uint16_t)JX_CALL(c,0x1f2a,0xa2f0)!=0) {}
+        /* Escape cancels loading and returns to the title, rather than
+         * immediately reopening the save browser. */
+        if((uint16_t)JX_CALL(c,0x1f2a,0xa2f0)==0)break;
+        /* The browser was opened after clearing the title. Reload its
+         * full background and palette before displaying the choices again. */
+        (void)JX_CALL(c,0x2f28,0x6dfe,0x043b,c->data_segment);
     }
     (void)JX_CALL(c,0x1f2a,0x58fa,0x04e2,c->data_segment);
 }

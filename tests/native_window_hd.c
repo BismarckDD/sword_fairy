@@ -86,5 +86,18 @@ int main(void){
     assert(!window.back_dc && !window.back_bitmap && !window.back_original);
     puts("PASS: HD pack enables 1280x800 client, 8:5 viewport and F8 comparison");
     puts("PASS: all paints compose offscreen, repeated resize stays stable and GDI objects are released");
+    for(unsigned i=0;i<768;i++)palette[i]=32;
+    memset(palette,0,3);palette[3]=16;palette[4]=32;palette[5]=48;
+    window.hd=jx_hd_open("build/hd-fixture");assert(window.hd);window.hd_disabled=0;
+    assert(jx_native_window_open(&window));
+    const uint8_t source[]={1,2,255,1};memcpy(memory+0x2000,source,sizeof source);
+    for(unsigned p=0;p<4;p++)video.planes[(10+p%2)%4][(12+p/2)*80+(10+p%2)/4]=source[p];
+    jx_hd_blit(window.hd,&context,&video,(uint16_t[]){10,12,2,2,0,0x200},-1);
+    assert(jx_native_save_browser(&window,memory,2)==0);
+    assert(window.save_scene[6*160+5]==0x2255aa);
+    window.hd_disabled=1;assert(jx_native_save_browser(&window,memory,2)==0);
+    assert(window.save_scene[6*160+5]==0x4080c0);
+    jx_native_window_close(&window);jx_hd_close(window.hd);window.hd=NULL;
+    puts("PASS: save thumbnail captures HD framebuffer and follows F8 original mode");
     return 0;
 }

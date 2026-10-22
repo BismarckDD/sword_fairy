@@ -29,7 +29,12 @@ typedef struct {
     JxEventContext *battle_context;
     uint16_t battle_actors[2],battle_enemy_max;
     int battle_visible;
+    int title_visible;
+    unsigned title_selection;
+    uint8_t title_glyphs[2][4][32];
 } JxNativeWindow;
+uint16_t jx_native_title_menu(JxNativeWindow *,JxEventContext *,JxFarPointer);
+uint16_t jx_native_selection_color(const JxNativeWindow *);
 void jx_native_battle_begin(JxNativeWindow *,JxEventContext *,uint16_t,uint16_t,uint16_t);
 void jx_native_battle_end(JxNativeWindow *);
 int jx_native_battle_hp(JxNativeWindow *,unsigned,uint16_t *,uint16_t *);

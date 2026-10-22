@@ -28,6 +28,17 @@ int main(void){
  jx_hd_tile_copy(h,&c,bg,-1);memcpy(memory+0x80000,memory+0x82000,256);
  jx_hd_walk_slot(h,30,164,100);jx_hd_walk_source(h,1,100);jx_hd_tile_copy(h,&c,sprite,255);memory[0x80000+off(1)]=1;show(h,&c,16,16);
  const uint32_t *out=jx_hd_render(h,&video,palette);assert(out[64*1280+64]==0xff0000);assert(out[64*1280+68]==0x0000ff);assert(out[64*1280+72]==0x80007f);assert(jx_hd_walk_hits(h)==1);
+ /* Save browser borrows the VGA page, including writes through font hooks. */
+ static JxVideoModel saved_video;static uint32_t saved_frame[1280*800];
+ saved_video=video;memcpy(saved_frame,out,sizeof saved_frame);
+ void *scene=jx_hd_scene_save(h);assert(scene);
+ jx_hd_ui_begin(h,&video,palette,0);jx_hd_ui_begin(h,&video,palette,1);
+ video.map_mask=15;
+ for(unsigned at=0;at<16000;at++){jx_hd_write(h,&video,0xa0000+at);for(unsigned lane=0;lane<4;lane++)video.planes[lane][at]=1;}
+ out=jx_hd_render(h,&video,palette);assert(out[300*1280+400]==0xfcfcfc);
+ video=saved_video;jx_hd_ui_end(h);jx_hd_ui_end(h);jx_hd_scene_restore(h,scene);
+ out=jx_hd_render(h,&video,palette);assert(!memcmp(out,saved_frame,sizeof saved_frame));
+ puts("PASS: nested save browser restores complete HD scene after VGA/font writes");
  /* Capture/restore and VGA page copies retain both artwork and its underlay. */
  for(unsigned p=0;p<256;p++)memory[0x90000+p]=video.planes[(16+p%16)%4][(16+p/16)*80+(16+p%16)/4];
  jx_hd_capture(h,&c,(uint16_t[]){16,16,16,16,0,0x9000});
@@ -77,6 +88,13 @@ int main(void){
  }
  jx_hd_tile_capture(h,&c,&video,(uint16_t[]){16,16,16,16,0,0x8000});jx_hd_walk_source(h,1,500);jx_hd_tile_copy(h,&c,empty_sprite,255);show(h,&c,16,16);
  out=jx_hd_render(h,&video,palette);assert(out[64*1280+72]==0xff3f00); /* Same draw is idempotent. */
+ saved_video=video;memcpy(saved_frame,out,sizeof saved_frame);scene=jx_hd_scene_save(h);assert(scene);
+ jx_hd_ui_begin(h,&video,palette,1);video.map_mask=15;
+ for(unsigned at=0;at<16000;at++){jx_hd_write(h,&video,0xa0000+at);for(unsigned lane=0;lane<4;lane++)video.planes[lane][at]=1;}
+ (void)jx_hd_render(h,&video,palette);video=saved_video;
+ jx_hd_ui_end(h);jx_hd_scene_restore(h,scene);out=jx_hd_render(h,&video,palette);
+ assert(!memcmp(out,saved_frame,sizeof saved_frame));
+ puts("PASS: save browser preserves overlapping alpha layers");
  for(unsigned p=0;p<256;p++)memory[0x91000+p]=2;
  jx_hd_capture(h,&c,(uint16_t[]){16,16,16,16,0,0x9100});
  for(unsigned p=0;p<256;p++)video.planes[(64+p%16)%4][(16+p/16)*80+(64+p%16)/4]=2;

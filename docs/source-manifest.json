@@ -3,7 +3,7 @@
   "files": [
     {
       "path": "scripts/test-hd.ps1",
-      "sha256": "c9b093a44db96a9b63cc010019da1167351d2d94a3962df556cde50e4d56c992"
+      "sha256": "9da397a1dc6ebf34df8d2d566da5994228ab1e6f6f0ea6b3ade338b70141638b"
     },
     {
       "path": "src/engine/actor.c",
@@ -915,11 +915,11 @@
     },
     {
       "path": "src/platform/windows/native_hd.c",
-      "sha256": "f7d47071d5064f27e3d283124333807970c481d6bda08bf2dfb76610cb9dac31"
+      "sha256": "9b9e913d1a84ad1d755dfacd94e61f202a504ecacffc8a3bc5024bfa4ff72659"
     },
     {
       "path": "src/platform/windows/native_hd.h",
-      "sha256": "885b9b33df4955b19ffeab91615ca84fb2799eb7311503e42456eaa69b8c7f45"
+      "sha256": "a17a1538eac4b773961732f9ecd3e5e29e6c3c2cd1dba8cd0b18999282120e32"
     },
     {
       "path": "src/platform/windows/native_saves.c",
@@ -935,7 +935,7 @@
     },
     {
       "path": "src/platform/windows/resource_host.c",
-      "sha256": "fcb865e0bc9ec212b09fcace96ea6b3f5e157f92c304e6d31a5f4a5bfc274e76"
+      "sha256": "c64dd4517b99b7f0967ffbbfa26c84b47ab034c383e31543939353e373eff6eb"
     },
     {
       "path": "tests/item_description.c",
@@ -950,12 +950,16 @@
       "sha256": "a02fe0cd420e1cc7a3d68452d0e129c6fdb0e60089f79378c74a46d009be098f"
     },
     {
+      "path": "tests/native_hd_maps.c",
+      "sha256": "6889d9cc6694249a4f1fdbba95243151314bfc3b7a0c14d54803e0289618551e"
+    },
+    {
       "path": "tests/native_hd_perf.c",
       "sha256": "3cc46897736a89796269948b72db4c53891f13c6cbf1070ec21582a4926983a1"
     },
     {
       "path": "tests/native_hd_walk.c",
-      "sha256": "666d9d0cb3aa0bcf188af86b24c418de434af310be9b4af0c35fe223ad2d8e26"
+      "sha256": "59bcbe3c883efb04b7471e53956add0c56a041b472db98a650826fde41b73290"
     },
     {
       "path": "tests/native_save_browser.c",
@@ -1407,7 +1411,7 @@
     },
     {
       "path": "tools/import-all-sprites.py",
-      "sha256": "86749edd2ea925f2c0c404e33d8c3ebf3668fd5cff6109ab232ee500bdcba350"
+      "sha256": "f15e8e090778c054ac4f902793b97e4fdfb60412b65136f13c37f37aedaa6eda"
     },
     {
       "path": "tools/import-handpaint-walk.py",
@@ -1416,6 +1420,10 @@
     {
       "path": "tools/import-hd-art.ps1",
       "sha256": "8cbb0f5a5e30c49f1e390e1982c87e8049e4e51b14faa2d088b3791d88bd343c"
+    },
+    {
+      "path": "tools/import-imagegen-maps.py",
+      "sha256": "8b4eee7e3c9e0b9950402a94e9d72c1d1082d65fd6e4859304540ac766d8aca1"
     },
     {
       "path": "tools/refine-remaster.py",

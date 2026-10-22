@@ -13,6 +13,7 @@ unsigned jx_hd_walk_hits(const JxHd *);
 unsigned jx_hd_asset_count(const JxHd *);
 unsigned jx_hd_hits(const JxHd *);
 unsigned jx_hd_tile_hits(const JxHd *);
+unsigned jx_hd_map_hits(const JxHd *);
 unsigned jx_hd_animation_hits(const JxHd *);
 void jx_hd_reset(JxHd *);
 void jx_hd_read(JxHd *,unsigned address);
@@ -30,6 +31,10 @@ void jx_hd_dialogue_capture(JxHd *,JxEventContext *,const JxVideoModel *,const u
  * Nested screens share one scale; plain mode supports direct VGA browsers. */
 void jx_hd_ui_begin(JxHd *,const JxVideoModel *,const uint8_t *,int plain);
 void jx_hd_ui_end(JxHd *);
+/* Preserve presentation metadata while a direct-VGA browser borrows a page.
+ * Restore after restoring the VGA bytes; NULL is valid without HD. */
+void *jx_hd_scene_save(JxHd *);
+void jx_hd_scene_restore(JxHd *,void *);
 /* Returns a 1280x800 top-down 0x00RRGGBB framebuffer owned by the adapter. */
 const uint32_t *jx_hd_render(JxHd *,const JxVideoModel *,const uint8_t *palette);
 int jx_hd_export_bmp(JxHd *,const JxVideoModel *,const uint8_t *,const char *);

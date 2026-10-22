@@ -1,0 +1,4 @@
+interface:
+  display_name: "游戏地图AI重绘"
+  short_description: "以320像素上下文分块做近四倍AI重绘，提取64像素图块并拼接校验"
+  default_prompt: "使用 $game-map-redraw 重绘指定游戏地图，输出原生细节图、64像素素材库、完整拼图与校验记录。"

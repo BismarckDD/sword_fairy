@@ -9,10 +9,12 @@ static uint8_t memory[1048576],restored[65536],palette[768];
 static uint8_t *ds=memory+0x39e30;
 static const uint16_t (*events)[2];static unsigned event_count,event_index;
 static JxEventContext context;
+static unsigned highlights;
 void jx_native_window_present(JxNativeWindow *w){(void)w;}
 void jx_native_window_sync_ticks(JxNativeWindow *w){(void)w;}
 static uint32_t dispatch(void *opaque,uint16_t segment,uint16_t offset,const uint16_t *a,size_t n) {
     (void)opaque;
+    if(segment==0x1f2a && offset==0x06f2 && n==3 && a[0]==47)highlights++;
     if(segment==0x1f2a && offset==0xc1f2 && n==2) {
         assert(event_index<event_count);JxFarPointer input={a[0],a[1]};
         jx_far_set_byte(&context,input,0,(uint8_t)events[event_index][0]);jx_far_set_byte(&context,input,1,0);
@@ -49,8 +51,9 @@ int main(void) {
     for(unsigned i=0;i<768;i++)palette[i]=(uint8_t)(i&63);
     for(unsigned p=0;p<4;p++)for(unsigned i=0;i<65536;i++)video.planes[p][i]=(uint8_t)(i+p);
     uint32_t before=hash_bytes((uint8_t *)video.planes,sizeof video.planes);
-    static const uint16_t read99[][2]={{1,0x4b},{1,0x48},{0,0x39}};
-    last_slot=0;input(read99,3);assert(jx_native_game_save_browser(&window,&context,0)==98 && event_index==3);
+    static const uint16_t read99[][2]={{8,0},{8,0},{1,0x4b},{1,0x48},{0,0x39}};
+    last_slot=0;highlights=0;input(read99,5);assert(jx_native_game_save_browser(&window,&context,0)==98 && event_index==5);
+    assert(highlights>=5); /* Idle timer events redraw the selected text. */
     assert(before==hash_bytes((uint8_t *)video.planes,sizeof video.planes));
     static const uint16_t save21[][2]={{0,0x39}};
     last_slot=20;input(save21,1);assert(jx_native_game_save_browser(&window,&context,1)==20);inspect(&b,20);assert(b.slots[20].state==1 && b.slots[20].preview);

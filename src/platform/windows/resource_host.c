@@ -539,7 +539,8 @@ static uint32_t dispatch(void *opaque,uint16_t s,uint16_t o,const uint16_t *a,si
         JxPaletteFlow flow=o==0x3f66?jx_palette_fade_black(&h->c,(JxFarPointer){a[0],a[1]},(int16_t)a[2],&io):jx_palette_fade_to(&h->c,(JxFarPointer){a[0],a[1]},(int16_t)a[2],&io);
         if(flow)fail(h,"palette fade reported divide fault");return 0;
     }
-    if(s==0x1f2a && o==0x06f2 && n==3){jx_font_set_colors(&h->c,a[0],a[1],a[2]);return 0;}
+    if(s==0x1f2a && o==0x06f2 && n==3){jx_font_set_colors(&h->c,
+        a[0]==47 && h->window.handle?jx_native_selection_color(&h->window):a[0],a[1],a[2]);return 0;}
     if(s==0x1f2a && o==0x0718 && n==1){jx_font_set_mode(&h->c,a[0]);return 0;}
     if(s==0x2f28 && o==0x6572 && n==6){if(jx_text_pages(&h->c,a[0],a[1],a[2],(JxFarPointer){a[3],a[4]},a[5],(JxFarPointer){0x700,0x9f00}))fail(h,"original text page divide fault");return 0;}
     if(s==0x1f2a && o==0x0e04 && n==5){JxTextResult result=jx_font_draw_text_timed(&h->c,a[0],a[1],(JxFarPointer){a[2],a[3]},a[4]);if(result.flow==JX_GLYPH_STALLED)fail(h,"timed glyph raster stalled");return (uint16_t)result.result;}
@@ -2425,6 +2426,14 @@ adaptive_route_reloaded:;
     }
     if(h->ending_probe && s==0x2f28 && (o==0x3f66 || o==0x415e || o==0x648e || o==0x7062 || o==0x3b8e || o==0x7ec8) && getenv("JX_TRACE_ENDING"))
         printf("ending phase %04x:%04x polls=%u\n",s,o,h->story_poll_steps);
+    if(h->window.handle && s==0x1f2a && o==0x7baa && n==6 &&
+        a[0]==200 && a[1]==50 && a[2]==0x04db && a[3]==h->c.data_segment &&
+        a[4]==0x04d4 && a[5]==h->c.data_segment) {
+        if(h->original_init_probe){h->menu_probe=1;h->input_probe_step=0;}
+        uint16_t result=jx_native_title_menu(&h->window,&h->c,(JxFarPointer){0,0x9a00});
+        if(h->original_init_probe){h->menu_probe=0;key_scan(h,0x9c);}
+        return result;
+    }
     if(h->original_init_probe && s==0x1f2a && o==0x7baa && n==6){
         h->menu_probe=1;h->input_probe_step=0;
         uint32_t result=h->input_fallback(h->input_fallback_opaque,s,o,a,n);
@@ -3120,7 +3129,8 @@ int main(int argc,char **argv) {
         if(game) {
             jx_image_tail_load(&h->c,(JxFarPointer){0x04ca,h->c.data_segment});
             h->menu_probe=load_probe?2:(unsigned)game_probe;
-            uint16_t selected=jx_two_choice_menu(&h->c,200,50,(JxFarPointer){0x04db,h->c.data_segment},(JxFarPointer){0x04d4,h->c.data_segment},(JxFarPointer){0,0x9a00});
+            uint16_t selected=h->window.handle?jx_native_title_menu(&h->window,&h->c,(JxFarPointer){0,0x9a00}):
+                jx_two_choice_menu(&h->c,200,50,(JxFarPointer){0x04db,h->c.data_segment},(JxFarPointer){0x04d4,h->c.data_segment},(JxFarPointer){0,0x9a00});
             h->menu_probe=0;if(game_probe)key_scan(h,0x9c);
             if(selected!=0) {
                 jx_font_set_colors(&h->c,80,0,77);jx_font_set_mode(&h->c,176);
@@ -3565,6 +3575,7 @@ world_ready:
     }
     if(window_probe){
         if(h->window.hd && h->legacy_mode!=18) {
+            printf("HD imagegen scene: map=%.12s cells=%u\n",jx_ds(&h->c)+0x9356,jx_hd_map_hits(h->window.hd));
             if(!jx_hd_export_bmp(h->window.hd,h->video,h->palette,"main_decompiled/analysis/native_hd_preview.bmp"))fail(h,"cannot export HD verification image");
             printf("HD handpaint walk tiles=%u\n",jx_hd_walk_hits(h->window.hd));
             printf("HD superres matches: tiles=%u animation_frames=%u\n",jx_hd_tile_hits(h->window.hd),jx_hd_animation_hits(h->window.hd));

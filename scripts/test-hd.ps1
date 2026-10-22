@@ -14,6 +14,10 @@ try {
     if($LASTEXITCODE -ne 0){throw 'HD test compilation failed'}
     & ./build/native_hd_test.exe
     if($LASTEXITCODE -ne 0){throw 'HD adapter verification failed'}
+    & $compiler cc @common tests/native_hd_maps.c build/native_hd_test.o -o build/native_hd_maps.exe
+    if($LASTEXITCODE -ne 0){throw 'Map scene test compilation failed'}
+    & ./build/native_hd_maps.exe
+    if($LASTEXITCODE -ne 0){throw 'Map scene verification failed'}
     & $compiler cc @common tests/native_hd_walk.c build/native_hd_test.o -o build/native_hd_walk.exe
     if($LASTEXITCODE -ne 0){throw 'Handpaint test compilation failed'}
     & ./build/native_hd_walk.exe

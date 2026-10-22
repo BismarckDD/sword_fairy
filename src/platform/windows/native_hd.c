@@ -17,6 +17,9 @@ typedef struct {
     int truecolor,dynamic_kind;
     unsigned next_hash,next_dimension;
 } Asset;
+typedef struct {
+    char name[13],reference[240];unsigned x,y,asset,next;
+} MapRegion;
 typedef struct {unsigned address,width,height;uint8_t *indices,*walk_index,*rgba_valid,*blocked;uint32_t *tags,*walk,*under,*rgba;int has_walk;} Capture;
 #define WALK_MODELS 1024
 #define WALK_CACHE_BYTES (64u*1024u*1024u)
@@ -38,6 +41,7 @@ typedef struct {
     unsigned base[33],enabled[33],source,source_instance,hits;
 } WalkArt;
 struct JxHd {
+    MapRegion *map_regions;unsigned map_region_count,map_heads[256],map_hits;
     WalkArt *walk;
     Asset assets[HD_ASSETS];unsigned count,hits,tile_hits,animation_hits,clock,capture_next,cache_bytes;
     unsigned buckets[HD_BUCKETS],dimension_heads[321][201],max_height[321];
@@ -60,11 +64,46 @@ struct JxHd {
     uint8_t dialogue_base[260*80];
     unsigned panel_width,panel_height,panel_capture_width;
     int panel_is_menu;
-    unsigned ui_depth;
+    unsigned ui_depth,ui_plain_depth;
     int ui_plain;
     uint32_t ui_background[1280*800],ui_panel[640*400];
 };
 static const uint32_t *render_page(JxHd *,const JxVideoModel *,const uint8_t *,unsigned);
+typedef struct {
+    uint32_t tags[4][65536];uint8_t blocked[4][65536];
+    WalkArt *walk;
+} SceneState;
+void *jx_hd_scene_save(JxHd *h){
+    if(!h)return NULL;
+    SceneState *s=calloc(1,sizeof *s);if(!s)return NULL;
+    memcpy(s->tags,h->tags,sizeof s->tags);memcpy(s->blocked,h->blocked,sizeof s->blocked);
+    if(h->walk){
+        s->walk=malloc(sizeof *s->walk);if(!s->walk){free(s);return NULL;}
+        memcpy(s->walk,h->walk,sizeof *s->walk);s->walk->rgba=NULL;
+        if(h->walk->rgba){
+            size_t bytes=4u*65536u*16u*sizeof(uint32_t);
+            s->walk->rgba=malloc(bytes);
+            if(!s->walk->rgba){free(s->walk);free(s);return NULL;}
+            memcpy(s->walk->rgba,h->walk->rgba,bytes);
+        }
+    }
+    return s;
+}
+void jx_hd_scene_restore(JxHd *h,void *state){
+    SceneState *s=state;if(!s)return;
+    if(h){
+        memcpy(h->tags,s->tags,sizeof h->tags);memcpy(h->blocked,s->blocked,sizeof h->blocked);
+        if(h->walk && s->walk){
+#define RESTORE_WALK(field) memcpy(h->walk->field,s->walk->field,sizeof h->walk->field)
+            RESTORE_WALK(tags);RESTORE_WALK(under);RESTORE_WALK(indices);
+            RESTORE_WALK(expected);RESTORE_WALK(rgba_valid);
+#undef RESTORE_WALK
+            free(h->walk->rgba);h->walk->rgba=s->walk->rgba;s->walk->rgba=NULL;
+        }
+        h->tile_valid=0;h->revision++;
+    }
+    if(s->walk){free(s->walk->rgba);free(s->walk);}free(s);
+}
 static uint32_t hash_bytes(const uint8_t *p,unsigned n){
     uint32_t h=2166136261u;for(unsigned i=0;i<n;i++){h^=p[i];h*=16777619u;}return h;
 }
@@ -91,6 +130,67 @@ static FILE *open_asset(JxHd *h,const char *name){
     char path[1280];if(!safe_path(name))return NULL;
     int n=snprintf(path,sizeof path,"%s/%s",h->directory,name);
     return n>0 && (size_t)n<sizeof path?fopen(path,"rb"):NULL;
+}
+static unsigned map_bucket(const char *name){return hash_bytes((const uint8_t *)name,(unsigned)strlen(name))&255u;}
+static void map_regions_open(JxHd *h){
+    FILE *list=open_asset(h,"maps/imagegen/scene-manifest.tsv");if(!list)return;
+    char line[1024];
+    while(h->count<HD_ASSETS && fgets(line,sizeof line,list)){
+        char name[13],reference[240],image[240];unsigned x,y,w,hh;
+        if(line[0]=='#' || sscanf(line,"%12[^\t]\t%u\t%u\t%u\t%u\t%239[^\t]\t%239[^\r\n]",name,&x,&y,&w,&hh,reference,image)!=7)continue;
+        if(!w || w>320 || !hh || hh>192 || w%16 || hh%16 || x%16 || y%16 || x>4096-w || y>4096-hh || !safe_path(reference) || !safe_path(image))continue;
+        MapRegion *regions=realloc(h->map_regions,(h->map_region_count+1)*sizeof *regions);
+        if(!regions)continue;h->map_regions=regions;
+        unsigned id=h->count++,bucket=map_bucket(name);Asset *a=&h->assets[id];
+        a->width=w;a->height=hh;strcpy(a->image,image);a->truecolor=1;a->dynamic_kind=3;
+        MapRegion *region=&regions[h->map_region_count];strcpy(region->name,name);strcpy(region->reference,reference);region->x=x;region->y=y;region->asset=id;region->next=h->map_heads[bucket];
+        h->map_heads[bucket]=++h->map_region_count;
+    }
+    fclose(list);
+}
+static int map_region_indices(JxHd *h,const MapRegion *region){
+    Asset *a=&h->assets[region->asset];if(a->indices)return 1;if(a->failed)return 0;
+    FILE *f=open_asset(h,region->reference);if(!f){a->failed=1;return 0;}
+    uint8_t *indices=malloc(a->width*a->height);if(!indices){fclose(f);return 0;}
+    int valid=fread(a->palette,1,768,f)==768 && fread(indices,1,a->width*a->height,f)==a->width*a->height && fgetc(f)==EOF;fclose(f);
+    if(!valid){free(indices);a->failed=1;return 0;}a->indices=indices;return 1;
+}
+/* Retag only exact original map tiles, after ordinary actor/foreground
+ * composition. Position-specific art preserves the complete generated scene
+ * even when the original game reuses one ground tile hundreds of times. */
+typedef struct {unsigned id,matched;} MapMatch;
+static uint32_t map_region_tag(JxHd *h,const MapRegion *region,uint32_t tag,unsigned x,unsigned y,unsigned p,MapMatch *cache,unsigned *count){
+    if(!tag)return tag;unsigned id=(tag>>16)-1,point=(tag&65535u)-1;
+    if(id>=h->count)return tag;Asset *old=&h->assets[id],*a=&h->assets[region->asset];
+    if(old->width!=16 || old->height!=16 || point!=p || old->dynamic_kind!=1)return tag;
+    unsigned sx=x-region->x,sy=y-region->y;
+    unsigned slot=0,matched=1;for(;slot<*count;slot++)if(cache[slot].id==id)break;
+    if(slot<*count)matched=cache[slot].matched;
+    else {
+        for(unsigned row=0;row<16;row++)if(memcmp(old->indices+row*16,a->indices+(sy+row)*a->width+sx,16)){matched=0;break;}
+        if(*count<16){cache[*count]=(MapMatch){id,matched};(*count)++;}
+    }
+    if(!matched)return tag;
+    return ((region->asset+1)<<16)|((sy+p/16)*a->width+sx+p%16+1);
+}
+static void map_region_tile(JxHd *h,JxEventContext *c,const uint16_t *a){
+    if(!h->map_region_count || a[0]%16 || a[1]%16)return;
+    char name[13];unsigned i;
+    for(i=0;i<12;i++){name[i]=(char)jx_ds(c)[0x9356+i];if(name[i]>='a' && name[i]<='z')name[i]=(char)(name[i]-'a'+'A');if(!name[i])break;}
+    name[i]=0;if(!i || i==12)return;
+    unsigned x=jx_word(c,0x8896)*16u+a[0],y=jx_word(c,0x8898)*16u+a[1];
+    int changed=0;
+    for(unsigned link=h->map_heads[map_bucket(name)];link;link=h->map_regions[link-1].next){
+        MapRegion *region=&h->map_regions[link-1];Asset *asset=&h->assets[region->asset];
+        if(strcmp(region->name,name) || x<region->x || y<region->y || x+16>region->x+asset->width || y+16>region->y+asset->height)continue;
+        if(!map_region_indices(h,region))continue;
+        MapMatch cache[16];unsigned count=0;
+        for(unsigned p=0;p<256;p++){
+            uint32_t old=h->tile_tags[p];h->tile_tags[p]=map_region_tag(h,region,old,x,y,p,cache,&count);if(old!=h->tile_tags[p])changed=1;
+            if(h->walk){old=h->walk->tile_under[p];h->walk->tile_under[p]=map_region_tag(h,region,old,x,y,p,cache,&count);if(old!=h->walk->tile_under[p])changed=1;}
+        }
+    }
+    if(changed)h->map_hits++;
 }
 static void walk_add(JxHd *h,unsigned resource,unsigned count,const char *image){
     if(resource>=WALK_MODELS || !count || count>4096 || !safe_path(image) || strlen(image)>210)return;
@@ -293,13 +393,14 @@ JxHd *jx_hd_open(const char *directory){
         if(legacy){fclose(legacy);walk_add(h,164,60,"walk_164.bin");}
     }
     walk_read_geometry(h);
+    map_regions_open(h);
     return h;
 }
 void jx_hd_close(JxHd *h){
     if(!h)return;
     for(unsigned i=0;i<h->count;i++){free(h->assets[i].indices);free(h->assets[i].pixels);}
     for(unsigned i=0;i<HD_CAPTURES;i++){free(h->captures[i].indices);free(h->captures[i].tags);free(h->captures[i].walk);free(h->captures[i].under);free(h->captures[i].walk_index);free(h->captures[i].rgba);free(h->captures[i].rgba_valid);free(h->captures[i].blocked);}
-    if(h->walk){for(unsigned i=0;i<h->walk->model_count;i++){free(h->walk->models[i].pixels);free(h->walk->models[i].wide);}free(h->walk->rgba);}free(h->walk);free(h);
+    if(h->walk){for(unsigned i=0;i<h->walk->model_count;i++){free(h->walk->models[i].pixels);free(h->walk->models[i].wide);}free(h->walk->rgba);}free(h->map_regions);free(h->walk);free(h);
 }
 void jx_hd_walk_slot(JxHd *h,unsigned slot,unsigned resource,unsigned base){
     if(h && h->walk && slot<33){
@@ -323,6 +424,7 @@ unsigned jx_hd_walk_hits(const JxHd *h){return h && h->walk?h->walk->hits:0;}
 unsigned jx_hd_asset_count(const JxHd *h){return h?h->count:0;}
 unsigned jx_hd_hits(const JxHd *h){return h?h->hits:0;}
 unsigned jx_hd_tile_hits(const JxHd *h){return h?h->tile_hits:0;}
+unsigned jx_hd_map_hits(const JxHd *h){return h?h->map_hits:0;}
 unsigned jx_hd_animation_hits(const JxHd *h){return h?h->animation_hits:0;}
 void jx_hd_reset(JxHd *h){
     if(!h)return;h->revision++;memset(h->tags,0,sizeof h->tags);memset(h->latches,0,sizeof h->latches);
@@ -330,7 +432,7 @@ void jx_hd_reset(JxHd *h){
     h->tile_valid=0;
     memset(h->blocked,0,sizeof h->blocked);memset(h->tile_blocked,0,sizeof h->tile_blocked);
     if(h->walk){memset(h->walk->tags,0,sizeof h->walk->tags);memset(h->walk->rgba_valid,0,sizeof h->walk->rgba_valid);h->walk->source=0;}
-    h->ui_depth=0;h->ui_plain=0;
+    h->ui_depth=0;h->ui_plain=0;h->ui_plain_depth=0;
     for(unsigned i=0;i<HD_CAPTURES;i++)h->captures[i].width=0;
 }
 void jx_hd_read(JxHd *h,unsigned at){
@@ -445,6 +547,7 @@ void jx_hd_blit_planes(JxHd *h,JxEventContext *c,const JxVideoModel *v,const uin
         h->scratch[y*w+x]=c->memory[(((uint32_t)a[5]*16)+(uint16_t)(a[4]+offset))&0xfffff];
     }
     if(w==16 && hh==16 && h->tile_valid && h->tile_address==far_address(a[5],a[4]) && !memcmp(h->tile_indices,h->scratch,256)){
+        map_region_tile(h,c,a);
         unsigned page=c->memory[0x44e]|((unsigned)c->memory[0x44f]<<8);h->revision++;
         for(unsigned p=0;p<256;p++){
             unsigned x=a[0]+p%16,y=a[1]+p/16;if(x>=320 || y>=200)continue;
@@ -508,12 +611,13 @@ void jx_hd_ui_begin(JxHd *h,const JxVideoModel *v,const uint8_t *palette,int pla
     if(!h->ui_depth){
         const uint32_t *pixels=jx_hd_render(h,v,palette);
         memcpy(h->ui_background,pixels,sizeof h->ui_background);
-        h->ui_plain=plain;
     }
-    h->ui_depth++;h->revision++;
+    h->ui_depth++;
+    if(plain && !h->ui_plain){h->ui_plain=1;h->ui_plain_depth=h->ui_depth;}
+    h->revision++;
 }
 void jx_hd_ui_end(JxHd *h){
-    if(h && h->ui_depth){h->ui_depth--;if(!h->ui_depth)h->ui_plain=0;h->revision++;}
+    if(h && h->ui_depth){h->ui_depth--;if(h->ui_depth<h->ui_plain_depth){h->ui_plain=0;h->ui_plain_depth=0;}h->revision++;}
 }
 static void scale2(const uint8_t *src,unsigned w,unsigned h,uint8_t *out){
     for(unsigned y=0;y<h;y++)for(unsigned x=0;x<w;x++){
@@ -578,7 +682,7 @@ static const uint32_t *render_page(JxHd *h,const JxVideoModel *v,const uint8_t *
      * edge-aware scaling here reshaped both Chinese and ASCII glyphs. */
     for(unsigned y=0;y<200;y++)for(unsigned x=0;x<320;x++){
         unsigned raw=h->low[y*320+x],at=(start+y*80+x/4)&65535;
-        uint32_t color=colors[walk_at(h,x%4,at,raw)?h->walk->indices[x%4][at]:raw];
+        uint32_t color=colors[!h->ui_plain && walk_at(h,x%4,at,raw)?h->walk->indices[x%4][at]:raw];
         for(unsigned dy=0;dy<4;dy++)for(unsigned dx=0;dx<4;dx++)h->output[(y*4+dy)*1280+x*4+dx]=color;
     }
     /* Cache pointers per frame so LRU eviction never happens mid-composition. */
